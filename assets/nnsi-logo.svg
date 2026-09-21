@@ -1,0 +1,23 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="48" y1="24" x2="468" y2="492" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9EB6FF"/>
+      <stop offset="0.48" stop-color="#7D78ED"/>
+      <stop offset="1" stop-color="#B878F0"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="150" y1="112" x2="366" y2="410" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#10182D"/>
+      <stop offset="1" stop-color="#22204B"/>
+    </linearGradient>
+    <filter id="glow" x="86" y="64" width="340" height="384" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="142" fill="#101522"/>
+  <rect x="28" y="28" width="456" height="456" rx="130" fill="url(#bg)"/>
+  <path d="M256 86C350 86 426 162 426 256C426 350 350 426 256 426C162 426 86 350 86 256C86 162 162 86 256 86Z" stroke="#E9EDFF" stroke-opacity=".2" stroke-width="3"/>
+  <path d="M179 164H333L302 216H269V352H215V216H148L179 164Z" fill="#10182D" fill-opacity=".45" filter="url(#glow)"/>
+  <path d="M179 150H333L302 202H269V338H215V202H148L179 150Z" fill="url(#mark)"/>
+  <path d="M168 150H344" stroke="#F5F7FF" stroke-opacity=".35" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="393" cy="119" r="9" fill="#F5F7FF" fill-opacity=".85"/>
+</svg>

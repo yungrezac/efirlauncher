@@ -1,0 +1,23 @@
+html #store .profile-wrap{align-items:center;top:12px;gap:8px}
+html #store .profile-button,html #store .subscription-badge,html #store #tiktok-button{height:38px;box-sizing:border-box;border-radius:12px;border:1px solid #37412d;background:#1c2118;color:#edf2e7;display:flex;align-items:center;justify-content:center;gap:8px;padding:4px 12px;font:600 12px Inter,sans-serif;box-shadow:none;-webkit-app-region:no-drag;cursor:pointer}
+html #store .profile-button:hover,html #store .subscription-badge:hover,html #store #tiktok-button:hover,html #tiktok-button[aria-expanded=true]{background:#293221;border-color:#71834d}
+html #store .subscription-badge small{font-size:11px;color:#d5fc6b;white-space:nowrap}
+html #store #profile-avatar{width:26px;height:26px;display:grid;place-items:center;border-radius:50%;font-size:13px}
+html #store #tiktok-name,html #store #profile-email{max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tiktok-control{position:relative;-webkit-app-region:no-drag}
+.tiktok-avatar{width:26px;height:26px;box-sizing:border-box;border-radius:50%;border:2px solid #777e71;display:grid;place-items:center;overflow:hidden;background:#31382b;flex-shrink:0;transition:border-color .2s,box-shadow .2s}
+.tiktok-avatar img{width:100%;height:100%;object-fit:cover}.tiktok-avatar [hidden]{display:none}
+[data-live=true] .tiktok-avatar{border-color:#4bdd88;box-shadow:0 0 7px #4bdd8855}
+#tiktok-popover{position:absolute;right:0;top:46px;width:278px;box-sizing:border-box;padding:16px;border:1px solid #3d4832;border-radius:16px;background:#191e16;box-shadow:0 16px 45px #0008;z-index:1000;animation:tiktok-open .14s ease-out}
+#tiktok-form label{display:block;font-size:11px;color:#a8b19b;margin-bottom:9px}
+.tiktok-input-row{display:flex;align-items:center;gap:6px;border:1px solid #465337;border-radius:10px;padding:4px 6px 4px 10px;background:#10140e;color:#9ba68e}
+.tiktok-input-row:focus-within{border-color:#c7eb69}
+html #tiktok-username{width:100%;min-width:0;padding:4px 0;border:0;background:transparent;box-shadow:none;outline:none;color:#edf2e7;font:500 13px Inter,sans-serif}
+html #tiktok-form button{padding:3px 9px;border:0;border-radius:7px;background:#d5fc6b;color:#101110;font-size:20px}
+.tiktok-footer{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:11px}
+html #tiktok-status{font-size:10px;color:#a6b199;line-height:1.4;margin:0}
+html #tiktok-disconnect{padding:0;border:0;background:transparent;color:#b6c0ac;font-size:10px;cursor:pointer}
+html #tiktok-disconnect[hidden],html #store .subscription-badge.hidden{display:none}
+@keyframes tiktok-open{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:1050px){html #store .topbar nav{left:38%}html #store #tiktok-name,html #store #profile-email{max-width:75px}html #store .wordmark small{display:none}}
+@media(min-width:1051px) and (max-width:1200px){html #store .topbar nav{left:40%}}

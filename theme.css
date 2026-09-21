@@ -1,0 +1,147 @@
+@font-face{font-family:Inter;src:url('assets/inter.woff2') format('woff2');font-weight:100 900;font-display:swap}
+:root{--accent:#d5fc6b;--accent-soft:#d5fc6b16;--ink:#101110;--surface:#171a16;--muted:#969e8d;--line:#30362b;--blue:var(--accent);--violet:var(--accent);color-scheme:dark;background:#101110}
+html,html body,html #store{font-family:Inter,'Segoe UI',sans-serif;background:#101110;color:#f3f5ec;letter-spacing:-.15px}
+button,input{font-family:inherit}
+button{transition:background .18s,border-color .18s,box-shadow .18s,transform .18s}
+button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+button:disabled{opacity:.55;cursor:wait}
+html #store .topbar{height:68px;background:#101110f5!important;border-bottom:1px solid #292e24;backdrop-filter:blur(18px)!important;z-index:35}
+html #store .topbar .wordmark,.auth-brand{display:inline-flex;align-items:center;gap:9px;position:fixed;left:24px;top:17px;height:34px;padding:0;color:#f3f5ec;font-size:21px;letter-spacing:-.7px;font-weight:900;pointer-events:auto;z-index:40;-webkit-app-region:no-drag}
+html #store .wordmark-logo,.auth-brand img{width:32px;height:32px;border-radius:9px}
+html #store .wordmark small,.auth-brand small{font-size:10px;letter-spacing:.1px;color:var(--muted);font-weight:500}
+html #store:has(#detail-view:not(.hidden)) .topbar .wordmark,html #store:has(#profile-view:not(.hidden)) .topbar .wordmark{display:none}
+html #store .topbar nav{top:16px;gap:4px;padding:3px;border:1px solid var(--line);border-radius:12px;background:#191d16}
+html #store .topbar nav button{padding:5px 17px;border:1px solid transparent;background:transparent;color:var(--muted);border-radius:8px;font-size:11px;font-weight:650}
+html #store .topbar nav button.nav-active{background:var(--accent);border-color:var(--accent);color:var(--ink);box-shadow:0 2px 8px #0003}
+html #store .profile-wrap{top:17px;right:138px;gap:8px}
+html #store .window-controls{top:19px;right:20px;gap:4px}
+html .window-control{background:transparent;border-color:transparent;color:#949c8c;border-radius:8px}
+html .window-control:hover{background:#292f24;color:#f4f7eb}
+html .window-control.close:hover{background:#512b30;color:#ffc4c4}
+html .profile-button,html .downloads-toggle{background:#1c2118;border:1px solid #37412d;color:#eef3e4;box-shadow:none}
+html .profile-button span:first-child{background:var(--accent);color:var(--ink)}
+html .profile-button:hover,html .downloads-toggle:hover,html .downloads-toggle[aria-expanded=true]{background:#293221;border-color:#687b49}
+html .subscription-badge{background:var(--accent-soft);border-color:#526331;color:#d5fc6b;box-shadow:none}
+html .subscription-badge small{color:#d5fc6b}
+html #store main{padding:68px 32px 32px;scrollbar-color:#4a563b #101110}
+html #store main::-webkit-scrollbar-thumb,html .auth-shell::-webkit-scrollbar-thumb{background:#465137;border-color:#101110}
+html #home-view{padding-top:12px}
+html #home-view .section-heading{margin:22px 6px 25px;align-items:center}
+html .section-heading h2{font-size:32px;font-weight:750;letter-spacing:-1.2px;margin-top:10px}
+html .eyebrow{color:var(--accent);letter-spacing:2px;font-size:9px;font-weight:700}
+html #status{font-size:11px;color:var(--muted)}
+html #apps{gap:20px;padding:4px 6px 36px;grid-template-columns:repeat(auto-fill,minmax(265px,1fr))}
+html .app-card{background:linear-gradient(155deg,#1d2219,#151813);border:1px solid #333c2a;border-radius:20px;box-shadow:0 8px 24px #0002;transition:transform .2s,border-color .2s,box-shadow .2s}
+html .app-card:hover{transform:translateY(-4px);border-color:#839955;box-shadow:0 12px 35px #0004}
+html .app-cover{height:174px;background-color:#252f1b;background-image:radial-gradient(ellipse at 30% 25%,#d5fc6b24,transparent 70%);border-bottom:1px solid #ffffff08}
+html .app-cover>span{color:var(--accent);font-size:64px;letter-spacing:-5px}
+html .cover-glow{background:linear-gradient(transparent,#171b14)}
+html .app-card-body{padding:20px}
+html .app-card h3{font-size:20px;letter-spacing:-.6px}
+html .app-card p{color:#a4ad98;font-size:12px;line-height:1.65;height:40px}
+html .app-card-footer{margin-top:22px;color:#8d9881}
+html .card-action,html .primary,html .action-launch,html .action-install,html .action-update,html .subscription-actions button.primary-payment{background:var(--accent)!important;color:#151b0b!important;border:1px solid transparent;border-radius:10px;font-weight:750;box-shadow:0 4px 14px #d5fc6b0b}
+html .card-action:hover,html .primary:hover{background:#e3ff99!important;box-shadow:0 4px 20px #d5fc6b24}
+html .card-action{padding:10px 16px}
+html .action-close,html .card-action.danger{background:#46292d!important;color:#ffb4be!important;border-color:#6f3e45}
+html .action-unavailable{background:#30372a!important;color:#adb99c!important}
+html .back-button,html .profile-page-back{left:24px;top:16px;width:36px;height:36px;border:1px solid #3e4832;border-radius:11px;background:#20271a;box-shadow:none;color:var(--accent)}
+html .profile-page-back::before{color:var(--accent)}
+html .back-button:hover,html .profile-page-back:hover{background:#344226;border-color:#859d55}
+html #detail-view{padding-top:20px}
+html .detail{border-color:var(--line);background:#161a13;border-radius:22px;overflow:hidden}
+html .detail-hero{background-color:#252e1c}
+html .detail-icon{background:#2e3a20;color:var(--accent);border-color:#556738}
+html .detail h1{letter-spacing:-1.5px}
+html .detail-side,html .version-box,html .detail-content{background:#161a13;border-color:var(--line)}
+html .detail-main p,html .version-box span{color:var(--muted);line-height:1.7}
+html #profile-view{min-height:0;padding:28px 0 32px}
+html .profile-layout{display:grid;grid-template-columns:192px minmax(0,1fr);gap:24px;max-width:1080px;align-items:start;margin:0 auto}
+html .profile-sidebar{position:sticky;top:28px;padding:0;background:transparent;border:0;border-radius:0}
+html .profile-sidebar nav{display:grid;gap:6px}
+html .profile-content{min-width:0;padding:28px;background:#171c14;border:1px solid #343d2c;border-radius:20px}
+html .profile-heading{gap:16px;margin:0 0 28px;align-items:center}
+html .profile-heading>div:last-child{min-width:0}
+html .profile-content h1{font-size:28px;line-height:1.2;letter-spacing:-.8px;overflow-wrap:anywhere}
+html .profile-page-subtitle{font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+html .profile-large-avatar{width:54px;height:54px;flex:0 0 54px;border-radius:17px;font-size:24px}
+html .profile-info,html .settings-panel,html .subscription-panel{min-width:0;max-width:none;padding:0;background:transparent;border:0;border-radius:0;box-shadow:none}
+html .profile-info{border-top:1px solid var(--line)}
+html .profile-info-row{display:grid;grid-template-columns:90px minmax(0,1fr);align-items:start;gap:20px;margin:0;padding:19px 0}
+html .profile-info-row strong{white-space:normal;overflow-wrap:anywhere;overflow:visible;text-align:left;line-height:1.6}
+html .profile-logout{position:static;display:block;width:100%;margin:28px 0 0;padding:11px 13px;text-align:left;box-shadow:none;font-size:11px}
+html .settings-panel h2{padding-top:22px;border-top:1px solid var(--line);font-size:17px;letter-spacing:-.3px}
+html .setting-row{padding:20px 0;gap:20px;align-items:center}
+html .setting-row>div{min-width:0;flex:1}
+html .setting-row small{max-width:480px;line-height:1.65}
+html .setting-switch{width:44px;height:24px;flex:0 0 44px}
+html .setting-switch input:focus-visible+.setting-slider{outline:2px solid var(--accent);outline-offset:4px}
+html .profile-nav-button{color:var(--muted);border-color:transparent;border-radius:10px}
+html .profile-nav-button.active{color:var(--accent);background:#d5fc6b15;border-color:#526535}
+html .profile-nav-button:hover{color:#e3f1cb;background:#27311e;border-color:#465935}
+html .profile-nav-button.active:hover{color:var(--accent);background:#323f25;border-color:#7d984c}
+html .profile-large-avatar{background:var(--accent);color:#18200e}
+html .profile-info-row,html .setting-row{border-color:var(--line)}
+html .profile-info-row span,html .profile-page-subtitle,html .setting-row small{color:var(--muted)}
+html .setting-slider{background:#343c2e}
+html .setting-slider::before{background:#c3ccb6}
+html .setting-switch input:checked+.setting-slider{background:var(--accent)}
+html .setting-switch input:checked+.setting-slider::before{background:#202718}
+html .auth-shell{background:radial-gradient(ellipse at 50% 25%,#d5fc6b0e,transparent 65%),#101110}
+html .auth-card{padding:32px;width:min(420px,calc(100% - 32px));border:1px solid #39432e;border-radius:24px;background:#181d15;box-shadow:0 28px 90px #0005}
+html .auth-tabs{background:#10150d;border-color:#343e2a;padding:4px;margin-bottom:26px}
+html .auth-tab{color:#9fa993}
+html .auth-tab.active{background:var(--accent);color:#18200f}
+html .auth-card label{color:#bec7b2;font-size:12px}
+html .auth-card input{background:#10150d;border-color:#39442e;border-radius:10px;color:#f3f6ee;padding:13px 14px}
+html .auth-card input:focus{border-color:var(--accent);box-shadow:0 0 0 3px #d5fc6b12}
+html .link-button{color:#c5df97}
+html .profile-menu,html .downloads-panel,html .subscription-box,html .subscription-payment-modal,html .uninstall-box{background:#1a2015;border-color:#414d32;box-shadow:0 18px 60px #0008;color:#f3f5ec}
+html .downloads-heading,html .download-item{border-color:var(--line)}
+html .download-item-heading span,html .downloads-count{color:var(--accent)}
+html .download-item>small,html .downloads-heading small{color:var(--muted)}
+html .download-track,html .uninstall-progress{background:#333e28}
+html .download-track>div,html .uninstall-progress-bar{background:var(--accent)}
+html .subscription-plan,html .subscription-summary,html .subscription-quote,html .payment-amount,html .payment-waiting{background:#202919;border-color:#455535;color:#dce8cc}
+html .subscription-plan.active,html .subscription-plan.selected{background:#d5fc6b18;border-color:var(--accent)}
+html .subscription-actions button,html .subscription-actions button.secondary-payment{background:#344226;color:#e5f1d5}
+html .subscription-status.active{background:#d5fc6b18;color:var(--accent)}
+html .payment-waiting-spinner{border-color:#425333;border-top-color:var(--accent)}
+html .subscription-payment code{background:#10150d;color:#d1dfbd}
+html #store main::-webkit-scrollbar-thumb:hover,html .auth-shell::-webkit-scrollbar-thumb:hover{background:#819660}
+html .auth-shell,html #downloads-list{scrollbar-color:#4a563b #101110}
+html ::selection{background:#d5fc6b;color:#101110}
+html .downloads-toggle{color:var(--accent)}
+html .downloads-count{background:var(--accent);color:#101110}
+html .downloads-toggle:focus-visible,html .subscription-payment-close:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+html .subscription-badge:hover{background:#2c3a1d;border-color:#7a9845;color:var(--accent)}
+html #store .topbar nav button:hover{background:#303e23;border-color:#506535;color:#e2f0cf}
+html #store .topbar nav button.nav-active:hover{background:#e3ff99;border-color:#e3ff99;color:#101110}
+html .auth-tab:hover{background:#303e23;color:#e2f0cf}
+html .auth-tab.active:hover{background:#e3ff99;color:#101110}
+html .card-action.action-close:hover,html .card-action.danger:hover{background:#64333d!important;color:#ffd1d7!important;box-shadow:none}
+html .card-action.action-unavailable:hover{background:#414e33!important;color:#d2e0be!important;box-shadow:none}
+html .subscription-summary{margin:0 0 18px;padding:18px;gap:14px;border:1px solid #3e4a2f;border-radius:14px;align-items:center}
+html .subscription-summary>div{min-width:0}
+html .subscription-summary strong{font-size:16px;line-height:1.45}
+html .subscription-summary small,html .subscription-panel>p,html .subscription-quote,html .subscription-quote span{color:var(--muted);line-height:1.65}
+html .subscription-summary .subscription-status{margin:0;flex-shrink:0;white-space:nowrap}
+html .subscription-plans{gap:10px;margin:22px 0 16px}
+html .subscription-plan{padding:15px 10px;line-height:1.8;color:#dce8cc}
+html .subscription-plan:hover{background:#303e23;border-color:#7a9845;color:#f0f8e5}
+html .subscription-plan.active:hover{background:#3c4c27;border-color:var(--accent);color:#f0f8e5}
+html .subscription-quote{padding:16px;border:1px solid #38452b;background:#11170d;border-radius:12px}
+html .subscription-quote strong{color:#f3f5ec}
+html .subscription-panel>.subscription-actions{margin-top:18px;justify-content:flex-start}
+html .subscription-actions button{padding:12px 16px;font-size:12px;min-height:40px}
+html .subscription-actions button:hover,html .subscription-actions button.secondary-payment:hover{background:#4a5d32;color:#f1f8e6}
+html .subscription-actions button.primary-payment:hover{background:#e3ff99!important;color:#101110!important}
+html .subscription-box button{background:var(--accent);color:#101110}
+html .subscription-box button:hover{background:#e3ff99}
+html .subscription-overlay,html .subscription-payment-overlay,html .uninstall-overlay{background:#080b06dd}
+html .subscription-payment.subscription-payment-modal{border-color:#52653a!important;scrollbar-color:#4a563b transparent;box-sizing:border-box}
+html .subscription-payment-close{background:#28341e;color:#dce8cc;border-color:#4b5c36}
+html .subscription-payment-close:hover{background:#40552a;color:#f3f9e9;border-color:#819b53}
+html .payment-network-header span,html .payment-amount span,html .payment-waiting{color:var(--muted)}
+@media(max-width:900px){html #store .wordmark small{display:none}html #store .topbar nav{left:35%}html #store main{padding-inline:22px}html .section-heading h2{font-size:28px}html .profile-button #profile-email{max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}html .profile-layout{grid-template-columns:154px minmax(0,1fr);gap:18px}html .profile-content{padding:22px}html .profile-content h1{font-size:25px}html .profile-heading{gap:12px}html .profile-info-row{grid-template-columns:66px minmax(0,1fr);gap:12px}html .profile-nav-button{padding:12px}html .subscription-summary{align-items:flex-start;flex-direction:column}}
+@media(prefers-reduced-motion:reduce){html *,html *::before,html *::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}

@@ -1,0 +1,8 @@
+{
+  "name": "nnsi-tiktok-service",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": { "tiktok-live-connector": "2.4.4" },
+  "engines": { "node": ">=24" }
+}

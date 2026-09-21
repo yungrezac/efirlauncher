@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.github.com https://github.com https://license-server-production-8e69.up.railway.app; img-src 'self' data: https:; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>EFIR launcher</title>
+  <style>html,body{margin:0;background:#101110;color:#f3f5ec}#auth{visibility:hidden}</style>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="promo.css">
+<link rel="stylesheet" href="self-update.css">
+<link rel="stylesheet" href="header-accounts.css">
+<link rel="stylesheet" href="subscription-minimal.css">
+</head>
+<body>
+  <div id="auth" class="auth-shell">
+    <div class="auth-brand" aria-label="EFIR launcher"><img src="assets/efir-logo.svg" alt="" width="32" height="32"><strong>EFIR</strong><small>launcher</small></div>
+    <div class="auth-card">
+      <div class="logo-mark">E</div>
+      <span class="eyebrow">EFIR LAUNCHER</span>
+      <h1 id="auth-title">Войти в магазин</h1>
+      <p id="auth-subtitle">Управляйте своими приложениями.</p>
+      <form id="auth-form">
+        <label id="name-field" class="hidden">Имя<input id="auth-name" type="text" placeholder="Ваше имя"></label>
+        <label>Email<input id="auth-email" type="email" placeholder="you@example.com" required></label>
+        <label>Пароль<input id="auth-password" type="password" placeholder="Минимум 6 символов" minlength="6" required></label>
+        <button class="primary" type="submit" id="auth-submit">Войти</button>
+      </form>
+      <button class="link-button" type="button" id="auth-switch">Нет аккаунта? Зарегистрироваться</button>
+      <div id="auth-message" class="message"></div>
+    </div>
+  </div>
+
+  <div id="store" class="hidden">
+    <header class="topbar">
+      <button class="wordmark" id="home-button" type="button" aria-label="EFIR — главная"><img class="wordmark-logo" src="assets/efir-logo.svg" alt=""> EFIR <small>launcher</small></button>
+      <nav><button class="nav-active" id="apps-nav">Мои</button></nav>
+      <div class="profile-wrap">
+        <div id="downloads" class="downloads hidden">
+          <button id="downloads-toggle" class="downloads-toggle" type="button" title="Загрузки" aria-label="Загрузки" aria-expanded="false" aria-controls="downloads-panel">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M5 16v4h14v-4"/></svg>
+            <span id="downloads-count" class="downloads-count"></span>
+          </button>
+          <section id="downloads-panel" class="downloads-panel hidden" aria-label="Текущие загрузки">
+            <div class="downloads-heading">Загрузки <small id="downloads-summary"></small></div>
+            <ul id="downloads-list"></ul>
+          </section>
+        </div>
+        <button class="subscription-badge hidden" id="subscription-badge" type="button" title="Продлить подписку"><span>Подписка</span><small id="subscription-badge-days"></small></button>
+        <button class="profile-button" id="profile-button"><span id="profile-avatar">?</span><span id="profile-email">Профиль</span></button>
+        <div id="profile-menu" class="profile-menu hidden">
+          <strong id="profile-name">Пользователь</strong>
+          <small id="profile-menu-email"></small>
+          <button id="logout">Выйти</button>
+        </div>
+      </div>
+    </header>
+    <main>
+      <section id="home-view">
+        <div class="hero">
+          <div>
+            <span class="eyebrow">ВАША ЭКОСИСТЕМА</span>
+            <h1>Приложения,<br><em>которые работают</em></h1>
+            <p>Устанавливайте, запускайте и обновляйте свои инструменты из одного красивого места.</p>
+          </div>
+          <div class="hero-orb"><span>✦</span></div>
+        </div>
+        <div class="section-heading">
+          <div><span class="eyebrow">КАТАЛОГ</span><h2>Ваши приложения</h2></div>
+          <span id="status">Проверяю обновления…</span>
+        </div>
+        <section id="apps" class="apps-grid"></section>
+      </section>
+      <section id="detail-view" class="hidden"></section>
+      <section id="profile-view" class="hidden"></section>
+    </main>
+  </div>
+
+  <script src="./vendor/supabase-js.js"></script>
+  <script src="./vendor/qrcode.js"></script>
+<script src="subscription-ui.js"></script>
+<script src="renderer.js"></script>
+<script src="self-update-ui.js"></script>
+<script src="header-tiktok.js"></script>
+</body>
+</html>

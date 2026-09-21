@@ -1,0 +1,31 @@
+{
+  "apps": [
+    {
+      "id": "tiktimer",
+      "name": "ТАЙМЕР",
+      "description": "Инструменты для TikTok LIVE",
+      "owner": "yungrezac",
+      "repo": "TIKTIMER2",
+      "executable": "ТАЙМЕР.exe",
+      "icon": ""
+    },
+    {
+      "id": "zvuk",
+      "name": "Echo Live",
+      "description": "Лёгкая системная озвучка комментариев TikTok LIVE",
+      "owner": "yungrezac",
+      "repo": "zvuk",
+      "executable": "Echo Live.exe",
+      "icon": ""
+    },
+    {
+      "id": "flappybird",
+      "name": "Flappy Gifts",
+      "description": "Интерактивная игра для TikTok LIVE",
+      "owner": "yungrezac",
+      "repo": "FLAPPYBIRD",
+      "executable": "Flappy Gifts.exe",
+      "icon": ""
+    }
+  ]
+}

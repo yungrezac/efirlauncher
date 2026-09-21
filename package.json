@@ -1,0 +1,59 @@
+{
+  "name": "nnsi-app",
+  "productName": "EFIR launcher",
+  "version": "0.1.6",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis"
+  },
+  "dependencies": {
+    "electron-updater": "6.6.2"
+  },
+  "devDependencies": {
+    "electron": "29.4.6",
+    "electron-builder": "24.13.3"
+  },
+  "build": {
+    "appId": "com.efir.launcher",
+    "productName": "NNSI App",
+    "asar": true,
+    "electronLanguages": [
+      "ru",
+      "en-US"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!dist{,/**/*}",
+      "!tiktok-service{,/**/*}"
+    ],
+    "extraResources": [
+      {
+        "from": "tiktok-service",
+        "to": "tiktok-service"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/efir-logo.ico",
+      "artifactName": "EFIR-Launcher-Setup.${ext}",
+      "publish": {
+        "provider": "github",
+        "owner": "yungrezac",
+        "repo": "efirlauncher",
+        "releaseType": "release"
+      }
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "EFIR launcher"
+    }
+  }
+}

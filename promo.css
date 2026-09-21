@@ -1,0 +1,5 @@
+.promo-form { margin-top: 24px; padding-top: 20px; border-top: 1px solid #ffffff20; }
+.promo-form label { font-weight: 600; }
+.promo-form p { font-size: 13px; line-height: 1.5; }
+.promo-form input { min-width: 0; flex: 1; padding: 12px; color: inherit; background: #ffffff0a; border: 1px solid #ffffff30; border-radius: 10px; }
+.promo-form button:disabled { opacity: .6; cursor: wait; }

@@ -1,0 +1,31 @@
+html .profile-content.subscription-minimal{max-width:880px;width:100%;padding:30px;background:transparent;border:0;border-radius:0;box-shadow:none}
+html .subscription-minimal .profile-heading{margin-bottom:24px}
+html .subscription-minimal h1{font-size:28px;letter-spacing:-.8px;margin:0 0 6px}
+html .subscription-minimal .profile-page-subtitle{font-size:13px;margin:0}
+html .subscription-minimal .subscription-panel{padding:0;border:0;background:none;box-shadow:none}
+html .subscription-minimal .subscription-summary{padding:16px 0;margin:0 0 24px;border:0;border-bottom:1px solid #303829;border-radius:0;background:none}
+html .subscription-minimal .subscription-summary strong{font-size:15px}
+html .subscription-minimal .subscription-summary small{font-size:12px;margin-top:5px}
+html .subscription-minimal .subscription-status{font-size:11px;padding:7px 10px}
+html .subscription-minimal .subscription-plans{gap:10px;margin:0 0 24px}
+html .subscription-minimal .subscription-plan{padding:13px 10px;font-size:13px;line-height:1.8;border-radius:12px;background:#191f16;border:1px solid #35402c;box-shadow:none}
+html .subscription-minimal .subscription-plan.active{border-color:#c4e966;background:#26301c;color:#e4f7b7}
+.payment-methods h3{font-size:12px;font-weight:500;color:#a2ad94;margin:0 0 10px}
+.payment-method-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+html .payment-method{display:flex;align-items:center;gap:9px;text-align:left;min-width:0;padding:13px 12px;background:#171c14;color:#f0f2ea;border:1px solid #303a27;border-radius:12px;font-size:12px;cursor:default}
+html .payment-method.selected{border-color:#9ab953;background:#202819}
+html .payment-method:disabled{opacity:1;color:#c0c6b7;cursor:not-allowed}
+.payment-method img,.payment-method svg{width:26px;height:26px;object-fit:contain;flex-shrink:0}
+.payment-method small{display:block;font-size:10px;color:#8e9a80;margin-top:3px}
+.payment-check{margin-left:auto;color:#d5fc6b}
+html .subscription-minimal .subscription-checkout{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-top:24px;padding:20px 0;border-bottom:1px solid #303829}
+html .subscription-minimal .subscription-quote{margin:0;padding:0;border:0;background:none;box-shadow:none;gap:4px}
+html .subscription-minimal .subscription-quote strong{font-size:23px;letter-spacing:-.4px}
+html .subscription-minimal .subscription-quote span{font-size:11px;color:#9da98f}
+html .subscription-minimal .subscription-actions{margin:0;gap:8px}
+html .subscription-minimal .primary-payment{font-size:12px;padding:12px 18px;border-radius:10px;white-space:nowrap}
+.subscription-promo{margin-top:20px}.subscription-promo summary{font-size:12px;color:#b6c2a6;cursor:pointer;list-style:none}.subscription-promo summary::before{content:'+';margin-right:9px}.subscription-promo[open] summary::before{content:'−'}
+html .subscription-minimal .promo-form{border:0;padding-top:16px;margin:0}
+html .subscription-minimal .promo-form label{font-size:12px}.subscription-minimal .promo-form p{font-size:11px}
+html .subscription-minimal .promo-form input{height:39px;padding:10px 12px;font-size:12px;border-radius:10px}
+@media(max-width:1000px){.payment-method-grid{grid-template-columns:repeat(2,minmax(0,1fr))}html .profile-content.subscription-minimal{padding:20px}}

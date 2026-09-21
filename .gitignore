@@ -1,0 +1,4 @@
+node_modules/
+dist/
+tiktok-service/node_modules/
+*.log
