@@ -257,9 +257,31 @@ async function check(item) {
   return { installed, latest: release.tag_name, update: Boolean(savedVersion && savedVersion !== release.tag_name), running: installedOnDisk && await isRunning(item) };
 }
 async function findExecutable(item) {
+  if (!item?.id) return null;
   const root = appDir(item);
-  const candidates = [...(item.id === 'tiktimer' ? [path.join(root,'ТАЙМЕР.exe')] : []),path.join(root, item.executable), path.join(root, 'win-unpacked', item.executable)];
+  const declared = typeof item.executable === 'string' && item.executable.trim() ? item.executable.trim() : null;
+  const candidates = [
+    ...(item.id === 'tiktimer' ? [path.join(root, 'ТАЙМЕР.exe')] : []),
+    ...(declared ? [path.join(root, declared), path.join(root, 'win-unpacked', declared)] : [])
+  ];
   for (const candidate of candidates) if (fs.existsSync(candidate)) return candidate;
+
+  // Windows ZIP tools can decode non-ASCII filenames using the wrong code page.
+  // Identify an Electron package by its adjacent resources/app.asar so a damaged
+  // executable filename cannot make a complete installation look missing.
+  for (const directory of [root, path.join(root, 'win-unpacked')]) {
+    try {
+      if (!fs.existsSync(path.join(directory, 'resources', 'app.asar'))) continue;
+      const executables = (await fsp.readdir(directory, { withFileTypes: true }))
+        .filter(entry => entry.isFile() && entry.name.toLowerCase().endsWith('.exe'))
+        .map(entry => path.join(directory, entry.name));
+      if (executables.length === 1) return executables[0];
+      const preferred = executables.find(file => !/^(unins|elevate|squirrel|update)/i.test(path.basename(file)));
+      if (preferred) return preferred;
+    } catch (error) {
+      writeLog('executable fallback scan failed', { id: item.id, directory, message: error.message });
+    }
+  }
   return null;
 }
 function trayIcon() {
