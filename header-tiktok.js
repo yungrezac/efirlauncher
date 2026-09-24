@@ -3,6 +3,7 @@
  wrap.innerHTML=`<button type="button" id="tiktok-button" aria-expanded="false" aria-controls="tiktok-popover"><span class="tiktok-avatar"><span>♪</span><img hidden alt=""></span><span id="tiktok-name">TikTok</span></button><section id="tiktok-popover" class="hidden"><form id="tiktok-form"><label for="tiktok-username">Аккаунт TikTok</label><div class="tiktok-input-row"><span>@</span><input id="tiktok-username" placeholder="username" maxlength="32" autocomplete="off" spellcheck="false"><button type="submit" title="Подключить">→</button></div></form><div class="tiktok-footer"><span id="tiktok-status" role="status"></span><button id="tiktok-disconnect" type="button">Отключить</button></div></section>`;
  document.querySelector('#subscription-badge').before(wrap);
  const button=wrap.querySelector('#tiktok-button'),panel=wrap.querySelector('section'),input=wrap.querySelector('input'),status=wrap.querySelector('#tiktok-status'),avatar=wrap.querySelector('img'),fallback=wrap.querySelector('.tiktok-avatar span');
+ const historyList=document.createElement('datalist');historyList.id='tiktok-history';input.setAttribute('list',historyList.id);wrap.append(historyList);
  let debounce,state={};
  const open=value=>{panel.classList.toggle('hidden',!value);button.setAttribute('aria-expanded',String(value));if(value)input.focus();};
  button.onclick=()=>open(panel.classList.contains('hidden'));
@@ -10,6 +11,8 @@
  wrap.addEventListener('keydown',e=>{if(e.key==='Escape'){open(false);button.focus();}});
  const render=next=>{
   state=next;if(document.activeElement!==input)input.value=state.username||'';
+  const names=Array.isArray(state.history)?state.history:[];
+  if(historyList.dataset.names!==JSON.stringify(names)){historyList.dataset.names=JSON.stringify(names);historyList.replaceChildren(...names.slice().reverse().map(name=>{const option=document.createElement('option');option.value=name;return option;}));}
   button.dataset.live=String(state.status==='live');wrap.querySelector('#tiktok-name').textContent=state.nickname||state.username||'TikTok';
   button.title=state.username?'@'+state.username+' · '+(state.status==='live'?'В эфире':'Не в эфире'):'TikTok';
   const url=typeof state.avatar==='string'&&/^(https:\/\/|data:image\/)/.test(state.avatar)?state.avatar:'';

@@ -8,13 +8,18 @@ function startTikTokService(app, mainWindow, ipcMain) {
   let saved = {};
   try { saved = JSON.parse(fs.readFileSync(profile, 'utf8')); } catch {}
   let username = saved.username || '';
-  let state = { status: 'offline', username, nickname:saved.nickname || username,avatar:saved.avatar || '',roomId: '', message: '', subscribers: 0 };
+  const normalizeName=value=>String(value||'').trim().replace(/^@/,'').toLowerCase();
+  let history=[...new Set([...(Array.isArray(saved.history)?saved.history:[]),username].map(normalizeName).filter(name=>/^[a-z0-9_.]{1,32}$/.test(name)))].slice(-200);
+  let state = { status: 'offline', username, nickname:saved.nickname || username,avatar:saved.avatar || '',roomId: '', message: '', subscribers: 0, history };
   let cachedProfile = JSON.stringify(saved);
   let streams=[];
   const publish = patch => {
     state = { ...state, ...patch };
-    if (state.username && state.avatar) {
-      const next=JSON.stringify({username:state.username,nickname:state.nickname,avatar:state.avatar});
+    if (state.username) {
+      const name=normalizeName(state.username);
+      if(/^[a-z0-9_.]{1,32}$/.test(name))history=[...history.filter(item=>item!==name),name].slice(-200);
+      state.history=history;
+      const next=JSON.stringify({username:state.username,nickname:state.nickname,avatar:state.avatar,history});
       if(next!==cachedProfile){cachedProfile=next;fs.writeFileSync(profile,next);}
     }
     if (process.env.NNSI_DEV_SMOKE === '1') fs.writeFileSync(path.join(app.getPath('userData'), 'tiktok-status.json'), JSON.stringify(state, null, 2));
@@ -56,7 +61,9 @@ function startTikTokService(app, mainWindow, ipcMain) {
     await ready;
     if (!child.connected) throw new Error('Сервис TikTok остановлен');
     if (state.username === clean && ['connecting','live'].includes(state.status)) return true;
-    fs.writeFileSync(profile, JSON.stringify({ username: clean }, null, 2));
+    history=[...history.filter(item=>item!==normalizeName(clean)),normalizeName(clean)].slice(-200);
+    state.history=history;
+    fs.writeFileSync(profile, JSON.stringify({ username: clean, history }, null, 2));
     child.send({ type: 'connect', username: clean });
     return true;
   }));
