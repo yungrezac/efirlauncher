@@ -39,6 +39,7 @@ let accountSubscription = null;
 let selectedAppId = null;
 let viewMode = 'mine';
 const activeOperations = new Map();
+const pendingAppActions = new Map();
 const appVersions = new Map();
 let launcherSettings = { autoUpdate: false, autoStart: false };
 const automaticUpdates = new Set();
@@ -73,11 +74,8 @@ async function runAutomaticUpdates() {
       startOperation('update', item);
       $('#status').textContent = `Автообновление: ${item.name}`;
       setOperationStage('downloading', item.id);
-      await window.launcher.update(item.id, item);
-      setOperationStage('finalizing', item.id);
-      await refreshStatuses();
-      apps = apps.map(current => current.id === item.id ? { ...current, installed: current.latest || current.installed, update: false } : current);
-      renderApps();
+      const result = await window.launcher.update(item.id, item);
+      applyOperationResult('update', item.id, result);
     } catch (error) {
       console.warn('[NNSI AutoUpdate]', item.id, error);
       $('#status').textContent = `Ошибка автообновления: ${item.name}`;
@@ -334,7 +332,7 @@ async function showHomeView() {
 }
 async function logout() {
   if (subscriptionOrder && !(await cancelPendingSubscription(true))) return;
-  await supabase.auth.signOut();
+  await supabase.auth.signOut({scope:'local'});
   await window.launcher.setSession(null);
   hide('#store');
   show('#auth');
@@ -353,6 +351,7 @@ async function loadApps() {
   getRemoteAppData(local).catch(error => { console.warn('[Astral Store]', error); $('#status').textContent = 'Оффлайн-режим'; });
 }
 async function getRemoteAppData(local) {
+  const revisions = new Map(appStatusRevisions);
   const statuses = await window.launcher.getApps();
   // RLS returns public applications plus unpublished exclusive applications
   // granted to the current user. A client-side is_published filter would hide
@@ -361,16 +360,18 @@ async function getRemoteAppData(local) {
   const remote = !result.error && Array.isArray(result.data) ? result.data : null;
   const source = remote || local;
   const enriched = await Promise.all(source.map(async item => { const status = statuses.find(x => x.id === item.id) || await window.launcher.getAppStatus(item); const licenseAvailable = status.licenseAvailable === null || status.licenseAvailable === undefined ? apps.find(x => x.id === item.id)?.licenseAvailable : status.licenseAvailable; return fallbackApp({ ...item, media: item.store_media || item.media || [] }, { ...status, licenseAvailable, installed: status.installed || (status.installedOnDisk ? 'локально' : null) }); }));
-  apps = enriched;
+  apps = preserveCompletedOperations(enriched, revisions);
   applySubscriptionAccess();
   apps.forEach(item => { if (item.latest) appVersions.set(item.id, item.latest); });
   renderApps(); $('#status').textContent = 'Готово';
 }
 async function reloadStoreCatalog() {
+  const revisions = new Map(appStatusRevisions);
   const result = await supabase.from('store_apps').select('*, store_media(*)').order('created_at', { ascending: false });
   if (result.error) throw result.error;
   const source = Array.isArray(result.data) ? result.data : [];
-  apps = await Promise.all(source.map(async item => { const status = await window.launcher.getAppStatus(item); const previous = apps.find(current => current.id === item.id); const licenseAvailable = status.licenseAvailable === null || status.licenseAvailable === undefined ? previous?.licenseAvailable : status.licenseAvailable; return fallbackApp({ ...item, media: item.store_media || [] }, { ...status, licenseAvailable, installed: status.installedOnDisk ? 'локально' : null }); }));
+  const enriched = await Promise.all(source.map(async item => { const status = await window.launcher.getAppStatus(item); const previous = apps.find(current => current.id === item.id); const licenseAvailable = status.licenseAvailable === null || status.licenseAvailable === undefined ? previous?.licenseAvailable : status.licenseAvailable; return fallbackApp({ ...previous, ...item, media: item.store_media || [] }, { ...status, licenseAvailable, installed: status.installedVersion || (status.installedOnDisk ? previous?.installed || 'локально' : null) }); }));
+  apps = preserveCompletedOperations(enriched, revisions);
   applySubscriptionAccess();
   renderApps(); $('#status').textContent = 'Каталог обновлён';
 }
@@ -387,12 +388,36 @@ function subscribeCatalogRealtime() {
   clearInterval(catalogPollTimer); catalogPollTimer = setInterval(() => { if (!document.hidden && !$('#store').classList.contains('hidden')) reloadStoreCatalog().catch(error => console.warn('[Astral Catalog]', error.message)); }, 120000);
 }
 let statusRefreshPending = null;
+const appStatusRevisions = new Map();
+function preserveCompletedOperations(items, revisions) {
+  return items.map(item => {
+    const current = apps.find(app => app.id === item.id);
+    if (!current || (!activeOperations.has(item.id) && !pendingAppActions.has(item.id) && (revisions.get(item.id) || 0) === (appStatusRevisions.get(item.id) || 0))) return item;
+    const local = {};
+    for (const key of ['installed','installedVersion','installedOnDisk','latest','update','running']) local[key] = current[key];
+    return {...item, ...local};
+  });
+}
+function applyOperationResult(action, id, result) {
+  appStatusRevisions.set(id, (appStatusRevisions.get(id) || 0) + 1);
+  apps = apps.map(item => {
+    if (item.id !== id) return item;
+    if (action === 'install' || action === 'update') {
+      if (!result?.version) throw new Error('Установка не вернула версию приложения');
+      return {...item, installed:result.version, installedVersion:result.version, installedOnDisk:true,
+        latest:result.version, update:false, running:result.unchanged ? item.running : false};
+    }
+    return {...item, running:action === 'launch'};
+  });
+}
 function refreshStatuses() {
   if (statusRefreshPending) return statusRefreshPending;
   statusRefreshPending = (async () => {
+    const revisions = new Map(appStatusRevisions);
     const statuses = await window.launcher.getStatuses();
     const before = JSON.stringify(apps);
     apps = apps.map(item => {
+      if ((revisions.get(item.id) || 0) !== (appStatusRevisions.get(item.id) || 0) || activeOperations.has(item.id) || pendingAppActions.has(item.id)) return item;
       const status = statuses.find(x => x.id === item.id) || {};
       return { ...item, ...status, licenseAvailable: status.licenseAvailable == null ? item.licenseAvailable : status.licenseAvailable,
         installed: status.installedVersion || (status.installedOnDisk ? (item.installed || 'local') : null) };
@@ -418,6 +443,7 @@ function renderApps() {
   $('#apps').innerHTML = visible.length ? visible.map(item => { const running = item.running; const installed = Boolean(item.installed); const cover = item.cover_url || item.icon_url || ''; return `<article class="app-card" data-id="${item.id}"><div class="app-cover" style="${cover ? `background-image:url('${cover}')` : ''}"><span>${cover ? '' : initials(item.name)}</span><div class="cover-glow"></div></div><div class="app-card-body"><div class="app-card-title"><h3>${item.name}</h3>${running ? '<i class="live-dot">Запущено</i>' : ''}</div><p>${item.description || ''}</p><div class="app-card-footer"><small>${installed ? `Версия ${item.installed}` : `Версия ${item.latest || '—'}`}</small><button class="card-action action-${running ? 'close' : item.update && installed ? 'update' : installed ? 'launch' : 'install'}" data-app-action="${item.id}" data-action="${running ? 'close' : item.update && installed ? 'update' : installed ? 'launch' : 'install'}">${running ? 'Закрыть' : item.update && installed ? 'Обновить' : installed ? 'Открыть' : 'Установить'}</button></div></div></article>`; }).join('') : `<div class="empty-state">${viewMode === 'exclusive' ? 'Здесь появятся приложения, доступные лично вам.' : viewMode === 'mine' ? 'Установленных приложений пока нет.' : 'Каталог пуст.'}</div>`;
 }
 function renderApps() {
+  queueMicrotask(updateOperationUI);
   const visible = viewMode === 'exclusive' ? apps.filter(item => item.is_exclusive === true) : viewMode === 'mine' ? apps.filter(item => item.installed) : apps.filter(item => !item.installed && !item.is_exclusive);
   $('#apps').innerHTML = visible.length ? visible.map(item => { const action = appAction(item); const cover = item.cover_url || item.icon_url || ''; return `<article class="app-card" data-id="${item.id}"><div class="app-cover" style="${cover ? `background-image:url('${cover}')` : ''}"><span>${cover ? '' : initials(item.name)}</span><div class="cover-glow"></div></div><div class="app-card-body"><div class="app-card-title"><h3>${item.name}</h3>${item.running ? '<i class="live-dot">Запущено</i>' : ''}</div><p>${item.description || ''}</p><div class="app-card-footer"><small>${item.installed ? `Версия ${item.installed}` : `Версия ${item.latest || '—'}`}</small><button class="card-action action-${action}" data-app-action="${item.id}" data-action="${action}">${appActionText(action)}</button></div></div></article>`; }).join('') : `<div class="empty-state">${viewMode === 'exclusive' ? 'Здесь появятся приложения, доступные лично вам.' : viewMode === 'mine' ? 'Установленных приложений пока нет.' : 'Каталог пуст.'}</div>`;
 }
@@ -455,6 +481,15 @@ document.addEventListener('keydown', event => {
   }
 });
 function updateOperationUI() {
+  for (const [id, action] of pendingAppActions) {
+    if (action !== 'close' && action !== 'launch') continue;
+    document.querySelectorAll('[data-app-action], #detail-action').forEach(button => {
+      if ((button.dataset.appAction || button.dataset.id) === id) {
+        button.disabled = true;
+        button.textContent = action === 'close' ? 'Закрытие…' : 'Запуск…';
+      }
+    });
+  }
   const count = activeOperations.size;
   $('#downloads').classList.toggle('hidden', !count);
   $('#downloads-toggle').classList.toggle('is-active', count > 0);
@@ -515,11 +550,47 @@ window.launcher.onProgress(({ id, received, total, stage }) => {
 });
 
 // Keep the action button informative while the downloaded archive is being unpacked.
-async function performAction(action, id) { const item = apps.find(x => x.id === id); const button = $('#detail-action'); if (button) button.disabled = true; if (activeOperations.has(id)) return; startOperation(action, item); $('#status').textContent = action === 'close' ? '\u0417\u0430\u043a\u0440\u044b\u0432\u0430\u044e\u2026' : '\u0412\u044b\u043f\u043e\u043b\u043d\u044f\u044e\u2026'; try { if (action !== 'close') setOperationStage('downloading', item.id); await window.launcher[action](id, item); if (action !== 'close') setOperationStage('finalizing', item.id); const fresh = await window.launcher.getApps(); apps = apps.map(item => ({ ...item, ...(fresh.find(x => x.id === id) || {}) })); renderApps(); renderDetail(id); $('#status').textContent = '\u0413\u043e\u0442\u043e\u0432\u043e'; } catch (error) { $('#status').textContent = `\u041e\u0448\u0438\u0431\u043a\u0430: ${error.message}`; } finally { finishOperation(id); if (button) button.disabled = false; } }
-async function performCardAction(action, id, button) { const item = apps.find(x => x.id === id); button.disabled = true; if (activeOperations.has(id)) return; startOperation(action, item); $('#status').textContent = '\u0412\u044b\u043f\u043e\u043b\u043d\u044f\u044e\u2026'; try { if (action !== 'close') setOperationStage('downloading', item.id); await window.launcher[action](id, item); if (action !== 'close') setOperationStage('finalizing', item.id); await refreshStatuses(); $('#status').textContent = '\u0413\u043e\u0442\u043e\u0432\u043e'; } catch (error) { $('#status').textContent = `\u041e\u0448\u0438\u0431\u043a\u0430: ${error.message}`; } finally { finishOperation(id); button.disabled = false; } }
-async function enterStore(user, session) { setProfile(user); await window.launcher.setSession(session?.access_token || null); await refreshSubscriptionBadge(); launcherSettings = await window.launcher.getSettings().catch(() => launcherSettings); hide('#auth'); show('#store'); await loadApps(); subscribeCatalogRealtime(); }
+async function performApplicationAction(action, id, button) {
+  const item = apps.find(x => x.id === id);
+  if (!item || activeOperations.has(id) || pendingAppActions.has(id)) return;
+  pendingAppActions.set(id, action);
+  if (button) button.disabled = true;
+  if (button && action === 'close') button.textContent = 'Закрытие…';
+  if (button && action === 'launch') button.textContent = 'Запуск…';
+  startOperation(action, item);
+  $('#status').textContent = '\u0412\u044b\u043f\u043e\u043b\u043d\u044f\u044e\u2026';
+  try {
+    const result = await window.launcher[action](id, item);
+    applyOperationResult(action, id, result);
+    $('#status').textContent = '\u0413\u043e\u0442\u043e\u0432\u043e';
+  } catch (error) {
+    $('#status').textContent = '\u041e\u0448\u0438\u0431\u043a\u0430: ' + error.message;
+    void refreshStatuses();
+  } finally {
+    pendingAppActions.delete(id);
+    finishOperation(id);
+    renderApps();
+    if (selectedAppId === id && !$('#detail-view').classList.contains('hidden')) renderDetail(id);
+    if (activeOperations.size) updateOperationUI();
+    if (button) button.disabled = false;
+  }
+}
+async function performAction(action, id) { return performApplicationAction(action, id, $('#detail-action')); }
+async function performCardAction(action, id, button) { return performApplicationAction(action, id, button); }
+async function enterStore(user, session, claim=false) { setProfile(user); if(!await window.launcher.setSession(session?.access_token || null,{initialize:true,claim}))return; await refreshSubscriptionBadge(); launcherSettings = await window.launcher.getSettings().catch(() => launcherSettings); hide('#auth'); show('#store'); await loadApps(); subscribeCatalogRealtime(); }
+window.launcher.onSessionBlocked(async reason=>{
+ hide('#store');hide('#auth');
+ document.querySelector('.session-blocked')?.remove();
+ const overlay=document.createElement('div');overlay.className='subscription-overlay session-blocked';
+ const box=document.createElement('div');box.className='subscription-box';
+ const title=document.createElement('h3');title.textContent=reason==='replaced'?'Вы вошли в аккаунт с другого устройства':'Не удалось подтвердить сессию';
+ const text=document.createElement('p');text.textContent=reason==='replaced'?'Приложения на этом устройстве закрыты.':'Соединение с сервером отсутствует больше минуты. Приложения закрыты. Войдите после восстановления связи.';
+ const button=document.createElement('button');button.textContent='Перезайти';button.onclick=()=>{overlay.remove();show('#auth');$('#auth-password').value='';$('#auth-email').focus();};
+ box.append(title,text,button);overlay.append(box);document.body.append(overlay);
+ await supabase.auth.signOut({scope:'local'}).catch(()=>{});
+});
 
-$('#auth-form').addEventListener('submit', async event => { event.preventDefault(); const email = $('#auth-email').value.trim(); const password = $('#auth-password').value; const name = $('#auth-name').value.trim(); if (!supabase) return message('Supabase не загрузился. Проверьте подключение к интернету и перезапустите лаунчер.', true); if (!email || !email.includes('@')) return message('Введите email, например user@example.com.', true); if (password.length < 6) return message('Пароль должен содержать минимум 6 символов.', true); $('#auth-submit').disabled = true; message('Подключаемся…'); try { const request = authMode === 'signup' ? supabase.auth.signUp({ email, password, options: { data: { name } } }) : supabase.auth.signInWithPassword({ email, password }); const result = await Promise.race([request, new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase не ответил за 15 секунд. Проверьте интернет или настройки проекта.')), 15000))]); if (result.error) throw result.error; if (authMode === 'signup' && !result.data.session) message('Аккаунт создан. Проверьте почту и подтвердите email.'); else await enterStore(result.data.user, result.data.session); } catch (error) { console.error('[NNSI Auth]', error); message(error.message || 'Не удалось выполнить вход.', true); } finally { $('#auth-submit').disabled = false; } });
+$('#auth-form').addEventListener('submit', async event => { event.preventDefault(); const email = $('#auth-email').value.trim(); const password = $('#auth-password').value; const name = $('#auth-name').value.trim(); if (!supabase) return message('Supabase не загрузился. Проверьте подключение к интернету и перезапустите лаунчер.', true); if (!email || !email.includes('@')) return message('Введите email, например user@example.com.', true); if (password.length < 6) return message('Пароль должен содержать минимум 6 символов.', true); $('#auth-submit').disabled = true; message('Подключаемся…'); try { const request = authMode === 'signup' ? supabase.auth.signUp({ email, password, options: { data: { name } } }) : supabase.auth.signInWithPassword({ email, password }); const result = await Promise.race([request, new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase не ответил за 15 секунд. Проверьте интернет или настройки проекта.')), 15000))]); if (result.error) throw result.error; if (authMode === 'signup' && !result.data.session) message('Аккаунт создан. Проверьте почту и подтвердите email.'); else await enterStore(result.data.user, result.data.session, true); } catch (error) { console.error('[NNSI Auth]', error); message(error.message || 'Не удалось выполнить вход.', true); } finally { $('#auth-submit').disabled = false; } });
 $('#auth-email').addEventListener('invalid', event => { event.preventDefault(); message('Введите email, например user@example.com.', true); });
 $('#auth-switch').addEventListener('click', event => { event.preventDefault(); setAuthMode(authMode === 'login' ? 'signup' : 'login'); });
 $('#logout').addEventListener('click', logout);
@@ -602,7 +673,15 @@ $('#profile-view').addEventListener('change', event => {
     window.launcher.setAutoUpdate(event.target.checked).then(settings => { launcherSettings = settings; if (settings.autoUpdate) runAutomaticUpdates(); });
   }
 });
-setInterval(() => { if (!document.hidden && !$('#store').classList.contains('hidden')) refreshStatuses().then(() => { if (launcherSettings.autoUpdate) runAutomaticUpdates(); }); }, 5000);
+setInterval(() => { if (!document.hidden && !$('#store').classList.contains('hidden')) refreshStatuses().then(() => { if (launcherSettings.autoUpdate) runAutomaticUpdates(); }); }, 15000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !$('#store').classList.contains('hidden')) refreshStatuses(); });
+window.launcher.onAppRunning?.(({id,running}) => {
+  appStatusRevisions.set(id, (appStatusRevisions.get(id) || 0) + 1);
+  apps = apps.map(item => item.id === id ? {...item,running:Boolean(running)} : item);
+  if (pendingAppActions.has(id)) return;
+  renderApps();
+  if (selectedAppId === id && !$('#detail-view').classList.contains('hidden')) renderDetail(id);
+  if (activeOperations.size) updateOperationUI();
+});
 
 })();

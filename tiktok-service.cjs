@@ -10,6 +10,7 @@ function startTikTokService(app, mainWindow, ipcMain) {
   let username = saved.username || '';
   let state = { status: 'offline', username, nickname:saved.nickname || username,avatar:saved.avatar || '',roomId: '', message: '', subscribers: 0 };
   let cachedProfile = JSON.stringify(saved);
+  let streams=[];
   const publish = patch => {
     state = { ...state, ...patch };
     if (state.username && state.avatar) {
@@ -36,6 +37,7 @@ function startTikTokService(app, mainWindow, ipcMain) {
     child.on('message', message => {
       if (message.type === 'ready') { clearTimeout(timer); port = message.port; resolve(); }
       if (message.type === 'status') publish(message.state);
+      if (message.type === 'metrics') streams=message.streams;
     });
   });
   ready.catch(error => publish({ status: 'offline', message: error.message }));
@@ -63,6 +65,8 @@ function startTikTokService(app, mainWindow, ipcMain) {
   app.once('will-quit', () => child.kill());
   return {
     disconnect,
+    resetMetrics:()=>{streams=[];if(child.connected)child.send({type:'reset-metrics'});},
+    snapshot:()=>({stream:{status:state.status,username:state.username,roomId:state.roomId},streams}),
     async environment() { await ready; if (!child.connected) throw new Error('Сервис TikTok остановлен'); return { NNSI_TIKTOK_PORT: String(port), NNSI_TIKTOK_TOKEN: token }; }
   };
 }

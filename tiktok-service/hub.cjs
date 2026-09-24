@@ -57,6 +57,7 @@ class Hub extends EventEmitter {
     this.emit('status', this.state);
   }
   event(name, data) {
+    this.emit('event', name, data);
     this.broadcast({ type: 'event', name, data, sequence: ++this.sequence });
   }
   async close() {
