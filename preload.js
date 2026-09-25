@@ -26,7 +26,7 @@ contextBridge.exposeInMainWorld('launcher', {
   openExternal: target => ipcRenderer.invoke('external:open', target),
   getStatuses: () => ipcRenderer.invoke('apps:status'),
   onAppRunning: callback => { const listener = (_, value) => callback(value); ipcRenderer.on('app:running', listener); return () => ipcRenderer.removeListener('app:running', listener); },
-  getAppStatus: item => ipcRenderer.invoke('app:status', item),
+  getAppStatus: (item, options) => ipcRenderer.invoke('app:status', item, options),
   install: (id, item) => ipcRenderer.invoke('app:install', { id, item }),
   update: (id, item) => ipcRenderer.invoke('app:update', { id, item }),
   launch: (id, item) => ipcRenderer.invoke('app:launch', { id, item }),

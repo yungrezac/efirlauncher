@@ -1,31 +1,42 @@
 {
-  "apps": [
-    {
-      "id": "tiktimer",
-      "name": "ТАЙМЕР",
-      "description": "Инструменты для TikTok LIVE",
-      "owner": "yungrezac",
-      "repo": "TIKTIMER2",
-      "executable": "TIMER.exe",
-      "icon": ""
-    },
-    {
-      "id": "zvuk",
-      "name": "Echo Live",
-      "description": "Лёгкая системная озвучка комментариев TikTok LIVE",
-      "owner": "yungrezac",
-      "repo": "zvuk",
-      "executable": "Echo Live.exe",
-      "icon": ""
-    },
-    {
-      "id": "flappybird",
-      "name": "Flappy Gifts",
-      "description": "Интерактивная игра для TikTok LIVE",
-      "owner": "yungrezac",
-      "repo": "FLAPPYBIRD",
-      "executable": "Flappy Gifts.exe",
-      "icon": ""
-    }
-  ]
+    "apps":  [
+                 {
+                     "id":  "tiktimer",
+                     "name":  "РўРђР™РњР•Р ",
+                     "description":  "РРЅСЃС‚СЂСѓРјРµРЅС‚С‹ РґР»СЏ TikTok LIVE",
+                     "owner":  "yungrezac",
+                     "repo":  "TIKTIMER2",
+                     "executable":  "TIMER.exe",
+                     "icon":  ""
+                 },
+                 {
+                     "id":  "zvuk",
+                     "name":  "Echo Live",
+                     "description":  "Р›С‘РіРєР°СЏ СЃРёСЃС‚РµРјРЅР°СЏ РѕР·РІСѓС‡РєР° РєРѕРјРјРµРЅС‚Р°СЂРёРµРІ TikTok LIVE",
+                     "owner":  "yungrezac",
+                     "repo":  "zvuk",
+                     "executable":  "Echo Live.exe",
+                     "icon":  ""
+                 },
+                 {
+                     "id":  "flappybird",
+                     "name":  "Flappy Gifts",
+                     "description":  "РРЅС‚РµСЂР°РєС‚РёРІРЅР°СЏ РёРіСЂР° РґР»СЏ TikTok LIVE",
+                     "owner":  "yungrezac",
+                     "repo":  "FLAPPYBIRD",
+                     "executable":  "Flappy Gifts.exe",
+                     "icon":  ""
+                 },
+                 {
+                     "id":  "immwiget",
+                     "name":  "IMMWIGET",
+                     "description":  "Оформление оверлеев",
+                     "owner":  "yungrezac",
+                     "repo":  "IMMWIGET",
+                     "executable":  "IMMWIGET.exe",
+                     "icon":  "",
+                     "is_exclusive":  true,
+                     "is_published":  false
+                 }
+             ]
 }

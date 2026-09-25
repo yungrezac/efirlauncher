@@ -27,7 +27,7 @@ const brandCatalogItem = item => item.id === 'tiktimer' ? {
 let catalogItems = catalog.apps.map(brandCatalogItem);
 const SUPABASE_URL = 'https://qpoyojxupblhjeqbvqfr.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_QxJKRVOdn07hduJkqcbciw_oUADNl-C';
-const NNSI_LICENSE_SERVER_URL = (process.env.NNSI_LICENSE_SERVER_URL || 'https://license-server-production-8e69.up.railway.app').replace(/\/$/, '');
+const NNSI_LICENSE_SERVER_URL = (process.env.NNSI_LICENSE_SERVER_URL || 'https://efirlive.pro/api/launcher').replace(/\/$/, '');
 const publicKeyFile = path.join(__dirname, 'assets', 'nnsi-public.pem');
 const NNSI_TICKET_PUBLIC_KEY = process.env.NNSI_TICKET_PUBLIC_KEY || (fs.existsSync(publicKeyFile) ? fs.readFileSync(publicKeyFile, 'utf8') : '');
 const NNSI_APP_ID = 'tiktimer';
@@ -75,6 +75,11 @@ function settingsFile() { return path.join(app.getPath('userData'), 'settings.js
 function loadSettings() { try { launcherSettings = { ...launcherSettings, ...JSON.parse(fs.readFileSync(settingsFile(), 'utf8')) }; } catch { /* defaults */ } }
 async function saveSettings() { await fsp.mkdir(path.dirname(settingsFile()), { recursive: true }); await fsp.writeFile(settingsFile(), JSON.stringify(launcherSettings, null, 2)); }
 function catalogCacheFile() { return path.join(app.getPath('userData'), 'catalog-cache.json'); }
+function statusItems() {
+  const items = new Map(catalogItems.map(item => [item.id, item]));
+  for (const id of Object.keys(state)) if (!items.has(id) && /^[a-z0-9_-]+$/i.test(id)) items.set(id, {id});
+  return [...items.values()];
+}
 function loadCatalogCache() { try { const cached = JSON.parse(fs.readFileSync(catalogCacheFile(), 'utf8')); if (Array.isArray(cached) && cached.length) catalogItems = cached.map(brandCatalogItem); } catch { /* Используем встроенный каталог. */ } }
 async function syncCatalog() {
   // Supabase RLS decides which public or exclusive applications are visible.
@@ -84,15 +89,9 @@ async function syncCatalog() {
   return catalogItems;
 }
 async function saveState() { await fsp.mkdir(path.dirname(stateFile()), { recursive: true }); await fsp.writeFile(stateFile(), JSON.stringify(state, null, 2)); }
-function apiJson(url) {
-  return new Promise((resolve, reject) => {
-    https.get(url, { headers: { 'User-Agent': 'Astral-Launcher' } }, res => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) return apiJson(res.headers.location).then(resolve, reject);
-      let body = ''; res.setEncoding('utf8'); res.on('data', part => body += part); res.on('end', () => { if (res.statusCode !== 200) return reject(new Error(`GitHub API: ${res.statusCode}`)); try { resolve(JSON.parse(body)); } catch { reject(new Error('Некорректный ответ GitHub')); } });
-    }).on('error', reject);
-  });
-}
-const machineId = require('./machine-id.cjs');
+const releaseNetwork=require('./release-network.cjs');
+const apiJson=url=>releaseNetwork.json(url);
+const machineId=require('./machine-id.cjs');
 async function issueLaunchTicket(appId, accessToken) {
   if (!NNSI_LICENSE_SERVER_URL) throw new Error('В лаунчере не настроен NNSI_LICENSE_SERVER_URL.');
   if (!accessToken) throw new Error('Сессия Supabase не найдена. Перезапустите лаунчер и войдите в аккаунт.');
@@ -112,7 +111,14 @@ async function issueLaunchTicket(appId, accessToken) {
     request.on('error', reject); request.write(body); request.end();
   });
 }
-async function checkLicense(appId = NNSI_APP_ID) {
+const pendingLicenses=new Map();
+function checkLicense(appId = NNSI_APP_ID){
+ const key=(supabaseAccessToken||'')+':'+appId;
+ if(pendingLicenses.has(key))return pendingLicenses.get(key);
+ const task=fetchLicense(appId).finally(()=>pendingLicenses.delete(key));pendingLicenses.set(key,task);return task;
+}
+async function fetchLicense(appId) {
+  const sessionToken=supabaseAccessToken;
   const cached = licenseStatusCache.get(appId);
   if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.value);
   if (!NNSI_LICENSE_SERVER_URL || !supabaseAccessToken) return Promise.resolve(false);
@@ -125,7 +131,7 @@ async function checkLicense(appId = NNSI_APP_ID) {
         if (response.statusCode !== 200) return reject(new Error(data.error || `License check: HTTP ${response.statusCode}`));
         const finish = value => {
           const result = { value: value === true, expiresAt: Date.now() + 30000 };
-          licenseStatusCache.set(appId, result);
+          if(supabaseAccessToken===sessionToken)licenseStatusCache.set(appId, result);
           resolve(result.value);
         };
         return finish(data.active === true);
@@ -150,35 +156,13 @@ function licenseRequest(method, endpoint, body = null) {
     request.on('error', reject); if (payload) request.write(payload); request.end();
   });
 }
-function githubLatestWithoutApi(item) {
-  const start = `https://github.com/${item.owner}/${item.repo}/releases/latest`;
-  return new Promise((resolve, reject) => {
-    const follow = url => https.get(url, { headers: { 'User-Agent': 'Astral-Launcher' } }, res => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        const next = new URL(res.headers.location, url).toString(); res.resume(); return follow(next);
-      }
-      if (res.statusCode !== 200) { res.resume(); return reject(new Error(`GitHub Releases: ${res.statusCode}`)); }
-      const match = new URL(url).pathname.match(/\/releases\/tag\/([^/]+)$/); res.resume();
-      if (!match) return reject(new Error('Не удалось определить версию GitHub-релиза'));
-      const tag = decodeURIComponent(match[1]); const base = `https://github.com/${item.owner}/${item.repo}/releases/latest/download/`;
-      resolve({ tag_name: tag, assets: [{ name: 'win-unpacked.zip', browser_download_url: `${base}win-unpacked.zip` }, { name: 'update.zip', browser_download_url: `${base}update.zip` }] });
-    }).on('error', reject);
-    follow(start);
-  });
+async function githubLatestWithoutApi(item) {
+ const res=await releaseNetwork.response('https://github.com/'+item.owner+'/'+item.repo+'/releases/latest');
+ const finalUrl=res.req.path;res.resume();const match=finalUrl.match(/\/releases\/tag\/([^/?]+)/);
+ if(!match)throw Error('?? ??????? ?????????? ?????? ??????');
+ const tag=decodeURIComponent(match[1]);return {tag_name:tag,assets:[{name:'win-unpacked.zip',browser_download_url:'https://github.com/'+item.owner+'/'+item.repo+'/releases/download/'+encodeURIComponent(tag)+'/win-unpacked.zip'}]};
 }
-function download(url, target, win, id) {
-  return new Promise((resolve, reject) => {
-    https.get(url, { headers: { 'User-Agent': 'Astral-Launcher', Accept: 'application/octet-stream' } }, res => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) return download(res.headers.location, target, win, id).then(resolve, reject);
-      if (res.statusCode !== 200) return reject(new Error(`Загрузка: HTTP ${res.statusCode}`));
-      const total = Number(res.headers['content-length']) || 0; let received = 0; const out = fs.createWriteStream(target);
-      let lastProgress = 0;
-      const progress = () => { lastProgress = Date.now(); win.webContents.send('download:progress', { id, received, total }); };
-      res.on('data', chunk => { received += chunk.length; if (Date.now() - lastProgress >= 100) progress(); });
-      res.pipe(out); out.on('finish', () => { progress(); out.close(resolve); }); out.on('error', reject);
-    }).on('error', reject);
-  });
-}
+function download(url,target,win,id){return releaseNetwork.download(url,target,progress=>{if(!win.isDestroyed())win.webContents.send('download:progress',{id,...progress})});}
 function extract(zip, destination) {
   return new Promise((resolve, reject) => {
     execFile('tar.exe', ['-xf', zip, '-C', destination], { windowsHide: true }, tarError => {
@@ -275,9 +259,13 @@ async function stopAppProcesses(item) {
   ownedAppStates.set(root, false);
   publishRunning(item.id, false);
 }
-async function latest(item) {
-  try { return await apiJson(`https://api.github.com/repos/${item.owner}/${item.repo}/releases/latest`); }
-  catch (error) { if (String(error.message).includes('403')) return githubLatestWithoutApi(item); throw error; }
+const releaseCache=new Map(),releasePending=new Map();
+async function latest(item,refresh=false) {
+ const key=item.owner+'/'+item.repo,cached=releaseCache.get(key);
+ if(!refresh&&cached&&cached.until>Date.now())return cached.data;
+ if(releasePending.has(key))return releasePending.get(key);
+ const pending=(async()=>{try {let data;try{data=await apiJson('https://api.github.com/repos/'+key+'/releases/latest')}catch{data=await githubLatestWithoutApi(item)}releaseCache.set(key,{data,until:Date.now()+300000});return data;}finally{releasePending.delete(key)}})();
+ releasePending.set(key,pending);return pending;
 }
 function asset(release, name) { return (release.assets || []).find(x => x.name.toLowerCase() === name.toLowerCase()); }
 function resolveItem(id, item) { return catalogItems.find(x => x.id === id) || (item && item.id === id ? item : null); }
@@ -295,7 +283,7 @@ async function installedPackageIsComplete(item) {
   return Boolean(executable && diskFs.existsSync(path.join(path.dirname(executable), 'resources', 'app.asar')));
 }
 async function installOrUpdate(item, win, forceUpdate = false) {
-  const release = await latest(item); const dir = appDir(item); await fsp.mkdir(dir, { recursive: true });
+  const release = await latest(item,true); const dir = appDir(item); await fsp.mkdir(dir, { recursive: true });
   const updateAsset = asset(release, 'update.zip'); const fullAsset = asset(release, 'win-unpacked.zip'); const installed = state[item.id]?.version;
   const complete = installed ? await installedPackageIsComplete(item) : false;
   if (installed && complete && compareVersions(release.tag_name, installed) <= 0) {
@@ -503,16 +491,30 @@ app.whenReady().then(() => {
   ipcMain.handle('subscription:cancel-order', (_e, orderId) => licenseRequest('POST', `/v1/subscription/orders/${encodeURIComponent(orderId)}/cancel`, {}));
   ipcMain.handle('external:open', async (_e, target) => { const parsed = new URL(String(target)); if (!['https:', 'http:', 'ton:'].includes(parsed.protocol)) throw new Error('Unsupported external protocol'); await shell.openExternal(parsed.toString()); return true; });
   ipcMain.handle('catalog:sync', async () => syncCatalog());
-  ipcMain.handle('apps:cached', async () => Promise.all(catalogItems.map(async item => ({ id: item.id, installedVersion: state[item.id]?.version || null, installedOnDisk: Boolean(await findExecutable(item)), running: await isRunning(item), licenseAvailable: await checkLicense(item.id).catch(() => false) }))));
+  ipcMain.handle('apps:cached', async () => Promise.all(statusItems().map(async item => ({ id: item.id, installedVersion: state[item.id]?.version || null, installedOnDisk: Boolean(await findExecutable(item)), running: ownedAppStates.get(path.resolve(appDir(item)).toLowerCase()) ?? processSnapshot.includes(path.resolve(appDir(item)).toLowerCase()), licenseAvailable: licenseStatusCache.get(item.id)?.value ?? null }))));
   ipcMain.handle('window:minimize', () => mainWindow.minimize());
   ipcMain.handle('window:maximize', () => mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize());
   ipcMain.handle('window:close', () => mainWindow.hide());
-  ipcMain.handle('apps:list', async () => Promise.all(catalogItems.map(async item => { const status = await check(item).catch(error => ({ error: error.message })); return { ...item, ...status, licenseAvailable: await checkLicense(item.id).catch(() => false) }; })));
-  ipcMain.handle('apps:status', async () => Promise.all(catalogItems.map(async item => ({ id: item.id, installedVersion: state[item.id]?.version || null, installedOnDisk: Boolean(await findExecutable(item)), running: await isRunning(item), licenseAvailable: await checkLicense(item.id).catch(() => null) }))));
-  ipcMain.handle('app:status', async (_e, item) => ({ id: item.id, installedVersion: state[item.id]?.version || null, installedOnDisk: Boolean(await findExecutable(item)), running: await isRunning(item), licenseAvailable: item?.id ? await checkLicense(item.id).catch(() => null) : false }));
+  ipcMain.handle('apps:list', async () => Promise.all(catalogItems.map(async item => { const status = await check(item).catch(error => ({ error: error.message, installed: state[item.id]?.version || null, installedOnDisk: diskFs.existsSync(path.join(appDir(item), 'resources', 'app.asar')) })); return { ...item, ...status, licenseAvailable: await checkLicense(item.id).catch(() => null) }; })));
+  ipcMain.handle('apps:status', async () => Promise.all(statusItems().map(async item => ({ id: item.id, installedVersion: state[item.id]?.version || null, installedOnDisk: Boolean(await findExecutable(item)), running: await isRunning(item), licenseAvailable: await checkLicense(item.id).catch(() => null) }))));
+  ipcMain.handle('app:status', async (_e, item, options = {}) => ({ ...(options.checkRelease ? await check(item).catch(() => ({})) : {}), id: item.id, installedVersion: state[item.id]?.version || null, installedOnDisk: Boolean(await findExecutable(item)), running: await isRunning(item), licenseAvailable: item?.id ? await checkLicense(item.id).catch(() => null) : false }));
   async function requireSubscription(item) { await presence.ensure(); if (!item?.id || !(await checkLicense(item.id))) throw new Error('Активная подписка необходима для скачивания и запуска приложения'); }
-  ipcMain.handle('app:install', async (_e, payload) => { const item = resolveItem(payload.id, payload.item); await requireSubscription(item); return installOrUpdate(item, mainWindow); });
-  ipcMain.handle('app:update', async (_e, payload) => { const item = resolveItem(payload.id, payload.item); await requireSubscription(item); return installOrUpdate(item, mainWindow, true); });
+  async function installApplication(payload, update = false) {
+    let stage = 'access';
+    try {
+      const item = resolveItem(payload.id, payload.item);
+      writeLog('application install requested', {id: payload.id, update});
+      await requireSubscription(item);
+      stage = 'release';
+      writeLog('application install authorized', {id: payload.id});
+      return await installOrUpdate(item, mainWindow, update);
+    } catch (error) {
+      writeLog('application install rejected', {id: payload.id, stage, message: error.message});
+      throw error;
+    }
+  }
+  ipcMain.handle('app:install', (_e, payload) => installApplication(payload));
+  ipcMain.handle('app:update', (_e, payload) => installApplication(payload, true));
   ipcMain.handle('app:launch', async (_e, payload) => {
     const item = resolveItem(payload.id, payload.item); const exe = await findExecutable(item);
     if (!exe) throw new Error('Сначала установите приложение');
@@ -522,7 +524,7 @@ app.whenReady().then(() => {
       if (!NNSI_TICKET_PUBLIC_KEY) throw new Error('В лаунчере не настроен NNSI_TICKET_PUBLIC_KEY.');
       const ticketResponse = await issueLaunchTicket(item.id, supabaseAccessToken);
       writeLog('launch ticket issued', { id: item.id, expiresAt: ticketResponse.expires_at });
-      const launchEnv = { ...process.env, ...await tiktokService.environment(), ...await walletGateway.environment(), NNSI_LAUNCH_TICKET: ticketResponse.ticket, NNSI_TICKET_PUBLIC_KEY: NNSI_TICKET_PUBLIC_KEY };
+      const launchEnv = { ...process.env, ...await tiktokService.environment(), ...await walletGateway.environment(item.id), NNSI_LAUNCH_TICKET: ticketResponse.ticket, NNSI_TICKET_PUBLIC_KEY: NNSI_TICKET_PUBLIC_KEY };
       await presence.ensure();
       delete launchEnv.ELECTRON_RUN_AS_NODE;
       const child = spawn(exe, [], { cwd: path.dirname(exe), detached: true, stdio: 'ignore', windowsHide: false, env: launchEnv });
@@ -534,7 +536,7 @@ app.whenReady().then(() => {
       return true;
     }
     const token = crypto.randomBytes(32).toString('hex');
-    const launchEnv = { ...process.env, ...await tiktokService.environment(), ...await walletGateway.environment(), ASTRAL_LAUNCHER_TOKEN: token };
+    const launchEnv = { ...process.env, ...await tiktokService.environment(), ...await walletGateway.environment(item.id), ASTRAL_LAUNCHER_TOKEN: token };
     delete launchEnv.ELECTRON_RUN_AS_NODE;
     const child = spawn(exe, [], { cwd: path.dirname(exe), detached: true, stdio: 'ignore', windowsHide: false, env: launchEnv });
     trackProcess(child, path.dirname(exe), item.id);

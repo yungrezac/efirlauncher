@@ -352,14 +352,17 @@ async function loadApps() {
 }
 async function getRemoteAppData(local) {
   const revisions = new Map(appStatusRevisions);
-  const statuses = await window.launcher.getApps();
+  const statusRequest = window.launcher.getApps();
   // RLS returns public applications plus unpublished exclusive applications
   // granted to the current user. A client-side is_published filter would hide
   // those personal grants before they can reach the Exclusive tab.
   const result = await supabase.from('store_apps').select('*, store_media(*)').order('created_at', { ascending: false });
   const remote = !result.error && Array.isArray(result.data) ? result.data : null;
   const source = remote || local;
-  const enriched = await Promise.all(source.map(async item => { const status = statuses.find(x => x.id === item.id) || await window.launcher.getAppStatus(item); const licenseAvailable = status.licenseAvailable === null || status.licenseAvailable === undefined ? apps.find(x => x.id === item.id)?.licenseAvailable : status.licenseAvailable; return fallbackApp({ ...item, media: item.store_media || item.media || [] }, { ...status, licenseAvailable, installed: status.installed || (status.installedOnDisk ? 'локально' : null) }); }));
+  apps = preserveCompletedOperations(source.map(item => fallbackApp({...item,media:item.store_media||item.media||[]},apps.find(x=>x.id===item.id)||{})),revisions);
+  renderApps();
+  const statuses = await statusRequest;
+  const enriched = await Promise.all(source.map(async item => { const status = statuses.find(x => x.id === item.id) || await window.launcher.getAppStatus(item, {checkRelease:true}); const licenseAvailable = status.licenseAvailable === null || status.licenseAvailable === undefined ? apps.find(x => x.id === item.id)?.licenseAvailable : status.licenseAvailable; return fallbackApp({ ...item, media: item.store_media || item.media || [] }, { ...status, licenseAvailable, installed: status.installedVersion || status.installed || (status.installedOnDisk ? 'локально' : null) }); }));
   apps = preserveCompletedOperations(enriched, revisions);
   applySubscriptionAccess();
   apps.forEach(item => { if (item.latest) appVersions.set(item.id, item.latest); });
@@ -418,7 +421,8 @@ function refreshStatuses() {
     const before = JSON.stringify(apps);
     apps = apps.map(item => {
       if ((revisions.get(item.id) || 0) !== (appStatusRevisions.get(item.id) || 0) || activeOperations.has(item.id) || pendingAppActions.has(item.id)) return item;
-      const status = statuses.find(x => x.id === item.id) || {};
+      const status = statuses.find(x => x.id === item.id);
+      if (!status) return item;
       return { ...item, ...status, licenseAvailable: status.licenseAvailable == null ? item.licenseAvailable : status.licenseAvailable,
         installed: status.installedVersion || (status.installedOnDisk ? (item.installed || 'local') : null) };
     });
@@ -554,6 +558,7 @@ async function performApplicationAction(action, id, button) {
   const item = apps.find(x => x.id === id);
   if (!item || activeOperations.has(id) || pendingAppActions.has(id)) return;
   pendingAppActions.set(id, action);
+  document.querySelector('.application-error')?.remove();
   if (button) button.disabled = true;
   if (button && action === 'close') button.textContent = 'Закрытие…';
   if (button && action === 'launch') button.textContent = 'Запуск…';
@@ -565,6 +570,7 @@ async function performApplicationAction(action, id, button) {
     $('#status').textContent = '\u0413\u043e\u0442\u043e\u0432\u043e';
   } catch (error) {
     $('#status').textContent = '\u041e\u0448\u0438\u0431\u043a\u0430: ' + error.message;
+    showApplicationError(item, error);
     void refreshStatuses();
   } finally {
     pendingAppActions.delete(id);
@@ -575,9 +581,21 @@ async function performApplicationAction(action, id, button) {
     if (button) button.disabled = false;
   }
 }
+function showApplicationError(item, error) {
+  document.querySelector('.application-error')?.remove();
+  const notice = document.createElement('div');
+  notice.className = 'application-error';
+  notice.setAttribute('role', 'alert');
+  const text = document.createElement('span');
+  text.textContent = `${item.name || item.id}: ${error.message}`;
+  const close = document.createElement('button');
+  close.type = 'button'; close.textContent = 'Закрыть';
+  close.onclick = () => notice.remove();
+  notice.append(text, close); document.body.appendChild(notice);
+}
 async function performAction(action, id) { return performApplicationAction(action, id, $('#detail-action')); }
 async function performCardAction(action, id, button) { return performApplicationAction(action, id, button); }
-async function enterStore(user, session, claim=false) { setProfile(user); if(!await window.launcher.setSession(session?.access_token || null,{initialize:true,claim}))return; await refreshSubscriptionBadge(); launcherSettings = await window.launcher.getSettings().catch(() => launcherSettings); hide('#auth'); show('#store'); await loadApps(); subscribeCatalogRealtime(); }
+async function enterStore(user, session, claim=false) { setProfile(user); if(!await window.launcher.setSession(session?.access_token || null,{initialize:true,claim}))return; refreshSubscriptionBadge().catch(error=>console.warn(error)); launcherSettings = await window.launcher.getSettings().catch(() => launcherSettings); hide('#auth'); show('#store'); await loadApps(); subscribeCatalogRealtime(); }
 window.launcher.onSessionBlocked(async reason=>{
  hide('#store');hide('#auth');
  document.querySelector('.session-blocked')?.remove();
@@ -631,7 +649,7 @@ function normalizeAppVisuals() {
     const cover = card.querySelector('.app-cover');
     if (!item || !cover) return;
     if (!item.latest && appVersions.has(item.id)) item.latest = appVersions.get(item.id);
-    if (item.installed === 'local' || item.installed === 'локально') item.installed = item.latest || null;
+
     const version = card.querySelector('.app-card-footer small');
     if (version) version.textContent = item.installed ? `Версия ${item.installed}` : `Версия ${item.latest || '—'}`;
     const image = item.cover_url || item.icon_url || '';
@@ -648,7 +666,7 @@ function normalizeAppVisuals() {
   if (selectedAppId && !$('#detail-view').classList.contains('hidden')) {
     const item = apps.find(app => app.id === selectedAppId);
     if (item && !item.latest && appVersions.has(item.id)) item.latest = appVersions.get(item.id);
-    if (item && (item.installed === 'local' || item.installed === 'локально')) item.installed = item.latest || null;
+
     const hero = $('#detail-view .detail-hero');
     const icon = $('#detail-view .detail-icon');
     const versionValues = document.querySelectorAll('#detail-view .version-box strong');
