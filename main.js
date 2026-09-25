@@ -159,7 +159,7 @@ function licenseRequest(method, endpoint, body = null) {
 async function githubLatestWithoutApi(item) {
  const res=await releaseNetwork.response('https://github.com/'+item.owner+'/'+item.repo+'/releases/latest');
  const finalUrl=res.req.path;res.resume();const match=finalUrl.match(/\/releases\/tag\/([^/?]+)/);
- if(!match)throw Error('?? ??????? ?????????? ?????? ??????');
+ if(!match)throw Error('Не удалось определить версию GitHub-релиза');
  const tag=decodeURIComponent(match[1]);return {tag_name:tag,assets:[{name:'win-unpacked.zip',browser_download_url:'https://github.com/'+item.owner+'/'+item.repo+'/releases/download/'+encodeURIComponent(tag)+'/win-unpacked.zip'}]};
 }
 function download(url,target,win,id){return releaseNetwork.download(url,target,progress=>{if(!win.isDestroyed())win.webContents.send('download:progress',{id,...progress})});}
