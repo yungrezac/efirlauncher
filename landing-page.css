@@ -3,8 +3,7 @@
 @media(min-width:900px){.lp-page{margin-top:24px}}@media(max-width:480px){.lp-page{padding:0 18px}.lp-hero{margin:0 -18px}.lp-identity>span{font-size:8px;letter-spacing:1.4px}.lp-identity h1{font-size:calc(var(--name-size)*.7);letter-spacing:-.6px}.lp-brand{gap:7px}.lp-brand img{width:28px;height:28px}.lp-brand strong{font-size:18px}.lp-brand small{font-size:8px;letter-spacing:1.4px}.lp-panel{padding:18px;border-radius:23px}.lp-heading{font-size:9px;letter-spacing:1.5px}.lp-card{padding:14px 12px;gap:10px}.lp-icon{width:37px;height:37px;flex-basis:37px}.lp-copy strong{font-size:14px}.lp-copy small{font-size:11px}.lp-copy em{font-size:9px}}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
 .lp-rules{margin-top:16px;border:1px solid #d5fc6b33;border-radius:15px;background:#d5fc6b08}.lp-rules summary{display:flex;align-items:center;gap:12px;padding:17px;cursor:pointer;list-style:none;color:#d5fc6b;font-size:14px;font-weight:600}.lp-rules summary::-webkit-details-marker{display:none}.lp-rules summary svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.lp-rules summary b{margin-left:auto;font-size:22px}.lp-rules[open] summary b{transform:rotate(45deg)}.lp-rules summary:focus-visible{outline:2px solid #d5fc6b;outline-offset:2px;border-radius:15px}.lp-rules-text{white-space:pre-wrap;overflow-wrap:anywhere;padding:0 18px 20px;color:#dce5d5;font-size:14px;line-height:1.7}
 
-/* Reserve opposite sides at the upper silhouette, without a separate header. */
+/* Labels may share a free side; portrait geometry always stays unchanged. */
 .lp-identity{width:max-content;max-width:30%;transform-origin:top left}
-.lp-brand{right:4%;left:auto;max-width:30%;transform-origin:top left}
-.lp-photo img{transform-origin:top center}
+.lp-brand{right:4%;left:auto;width:max-content;max-width:30%;transform-origin:top left}
 .lp-page{display:flow-root}
