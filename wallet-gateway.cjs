@@ -7,10 +7,12 @@ function startWalletGateway({url,key,getToken}) {
   try {
    const leaderboard=req.url==='/flappy-leaderboard';
    const widget=req.url==='/immwiget';
-   if(req.method!=='POST'||(!leaderboard&&!widget&&req.url!=='/wallet')||!sessions.has(req.headers.authorization)||req.headers.origin)throw Error('Нет доступа');
-   let body='';for await(const chunk of req){body+=chunk;if(body.length>(leaderboard?900000:200000))throw Error('Слишком большой запрос');}
+   const raster=req.url==='/immwiget-raster';
+   if(req.method!=='POST'||(!leaderboard&&!widget&&!raster&&req.url!=='/wallet')||!sessions.has(req.headers.authorization)||req.headers.origin)throw Error('Нет доступа');
+   let body='';for await(const chunk of req){body+=chunk;if(body.length>(raster?5700000:leaderboard?900000:200000))throw Error('Слишком большой запрос');}
    const args=JSON.parse(body),accessToken=getToken(),session=sessions.get(req.headers.authorization);if(!accessToken||subject(accessToken)!==session.owner)throw Error('Аккаунт изменился: перезапустите приложение через лаунчер');
-   if(widget&&session.appId!=='immwiget')throw Error('Нет доступа');
+   if((widget||raster)&&session.appId!=='immwiget')throw Error('Нет доступа');
+   if(raster){const data=await require('./immwiget-raster.cjs').uploadRaster({args,owner:session.owner,url,key,accessToken});res.end(JSON.stringify({data}));return;}
    if(!(widget?['list','save','toggle','rotate','delete']:leaderboard?['list','report']:['list','credit','reserve','commit','cancel','profile']).includes(args.p_action))throw Error('Неизвестная операция');
    const response=await fetch(url+'/rest/v1/rpc/'+(widget?'immwiget_manage':leaderboard?'flappy_leaderboard':'timer_wallet'),{method:'POST',headers:{apikey:key,Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify(args),signal:AbortSignal.timeout(15000)});
    const data=await response.json();if(!response.ok)throw Error(data.code==='PGRST202'?'Балансы пока недоступны. Попробуйте позже.':data.message||'Ошибка баланса');

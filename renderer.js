@@ -2,6 +2,7 @@
 const SUPABASE_URL = 'https://qpoyojxupblhjeqbvqfr.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_QxJKRVOdn07hduJkqcbciw_oUADNl-C';
 const supabase = window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY);
+window.efirLandingClient = supabase;
 const $ = selector => document.querySelector(selector);
 // Обработчик профиля подключаем сразу: верхняя панель имеет прозрачные слои,
 // поэтому поздняя регистрация могла теряться после ошибки другого элемента.
