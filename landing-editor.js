@@ -6,9 +6,9 @@
  document.querySelector('#store .topbar nav').append(nav);
  const overlay=document.createElement('section');overlay.className='landing-overlay';overlay.hidden=true;overlay.setAttribute('aria-label','Конструктор лендинга');document.body.append(overlay);
  let owner=null,state=null,doc=null,pendingPhoto=null,photoPreview='',dirty=false,busy=false,requestId=0,previewTimer;
- const blank=()=>({nickname:'',slug:'',photo:'',items:[]});
+ const blank=()=>({nickname:'',slug:'',photo:'',items:[],rulesEnabled:false,rulesText:''});
  const message=(text,error=false)=>{const node=overlay.querySelector('.landing-status');if(node){node.textContent=text;node.classList.toggle('error',error);}};
- const errors={LANDING_ACCESS_REQUIRED:'Доступ к лендингу отозван. Обратитесь к администратору.',LANDING_CHANGED:'Лендинг изменён в другом окне. Закройте редактор и откройте его снова перед сохранением.',SLUG_TAKEN:'Этот адрес уже занят. Выберите другой.',INVALID_NICKNAME:'Введите ник от 1 до 32 символов.',INVALID_SLUG:'Адрес: от 3 до 40 латинских букв, цифр, дефисов или подчёркиваний.',INVALID_LINK:'Укажите полную ссылку, начинающуюся с https:// или http://.',PHOTO_AND_BUTTON_REQUIRED:'Для публикации добавьте фотографию и хотя бы одну кнопку.',INVALID_PHOTO:'Фотография не загрузилась. Выберите её снова.',INVALID_BUTTON:'Проверьте название и содержимое каждой кнопки.',TOO_MANY_BUTTONS:'Можно добавить до 24 кнопок.'};
+ const errors={SLUG_RESERVED:'Этот адрес закреплён за страницей сайта. Выберите другой.',INVALID_RULES:'Правила могут содержать до 10 000 символов.',RULES_REQUIRED:'Напишите правила таймера или выключите кнопку правил.',LANDING_ACCESS_REQUIRED:'Доступ к лендингу отозван. Обратитесь к администратору.',LANDING_CHANGED:'Лендинг изменён в другом окне. Закройте редактор и откройте его снова перед сохранением.',SLUG_TAKEN:'Этот адрес уже занят. Выберите другой.',INVALID_NICKNAME:'Введите ник от 1 до 32 символов.',INVALID_SLUG:'Адрес: от 3 до 40 латинских букв, цифр, дефисов или подчёркиваний.',INVALID_LINK:'Укажите полную ссылку, начинающуюся с https:// или http://.',PHOTO_AND_BUTTON_REQUIRED:'Для публикации добавьте фотографию и хотя бы одну кнопку.',INVALID_PHOTO:'Фотография не загрузилась. Выберите её снова.',INVALID_BUTTON:'Проверьте название и содержимое каждой кнопки.',TOO_MANY_BUTTONS:'Можно добавить до 24 кнопок.'};
  function errorText(error){return Object.entries(errors).find(([key])=>String(error.message).includes(key))?.[1]||'Не удалось сохранить. Проверьте подключение и повторите попытку.';}
  function clear(){requestId++;owner=null;state=null;doc=null;pendingPhoto=null;photoPreview='';dirty=false;nav.hidden=true;overlay.hidden=true;overlay.replaceChildren();}
  async function refreshAccess(){
@@ -33,17 +33,18 @@
   finally{nav.disabled=false;}
  }
  function draw(){
-  overlay.innerHTML=`<header class="landing-top"><div><h1>Мой лендинг</h1><p>Ваш ник, фотография и все ссылки в стиле EFIR.</p></div><button type="button" id="landing-close">Закрыть</button></header><div class="landing-workspace"><form class="landing-form"><fieldset style="border:0;padding:0;margin:0"><div class="landing-fields"><label>Ник<input id="landing-nickname" maxlength="32" required value="${L.esc(doc.nickname)}" placeholder="VIOLLA"></label><label>Адрес страницы<input id="landing-slug" minlength="3" maxlength="40" pattern="[a-z0-9][a-z0-9_-]{2,39}" required value="${L.esc(doc.slug)}" placeholder="violla"><small>efirlive.pro/u/<span id="landing-slug-hint">${L.esc(doc.slug||'ваш-ник')}</span></small></label></div><label class="landing-photo">Фотография<input id="landing-photo" type="file" accept="image/png,image/jpeg,image/webp"><small>PNG с прозрачным фоном выглядит как наши лендинги. Также подойдут JPG и WebP, до 5 МБ. Ник и логотип EFIR разместятся автоматически.</small></label><h2>Кнопки и ссылки</h2><div id="landing-items"></div><button type="button" class="landing-add" id="landing-add">+ Добавить кнопку</button><div class="landing-actions"><button type="submit">Сохранить черновик</button><button type="button" class="landing-publish" id="landing-publish">Опубликовать</button><button type="button" id="landing-unpublish" ${state.published?'':'hidden'}>Снять с публикации</button></div></fieldset><p class="landing-status" role="status" aria-live="polite"></p><button type="button" class="landing-public-link" id="landing-open-public" ${state.published?'':'hidden'}></button><small>Изменения черновика появятся на странице только после публикации.</small></form><aside class="landing-preview-wrap"><p>ПРЕДПРОСМОТР</p><iframe class="landing-preview-frame" title="Предпросмотр лендинга" src="landing-preview.html" sandbox="allow-scripts allow-same-origin"></iframe></aside></div>`;
-  rows();publishedLink();
+  overlay.innerHTML=`<header class="landing-top"><div><h1>Мой лендинг</h1><p>Ваш ник, фотография и все ссылки в стиле EFIR.</p></div><button type="button" id="landing-close">Закрыть</button></header><div class="landing-workspace"><form class="landing-form"><fieldset style="border:0;padding:0;margin:0"><div class="landing-fields"><label>Ник<input id="landing-nickname" maxlength="32" required value="${L.esc(doc.nickname)}" placeholder="VIOLLA"></label><label>Адрес страницы<input id="landing-slug" minlength="3" maxlength="40" pattern="[a-z0-9][a-z0-9_-]{2,39}" required value="${L.esc(doc.slug)}" placeholder="violla"><small>efirlive.pro/<span id="landing-slug-hint">${L.esc(doc.slug||'ваш-ник')}</span></small></label></div><section class="landing-photo" aria-labelledby="landing-photo-heading"><h2 id="landing-photo-heading">Фотография</h2><div class="landing-upload"><div class="landing-upload-thumbnail"><img id="landing-photo-thumb" alt="Ваша фотография" hidden><span id="landing-photo-empty">＋</span></div><div><label class="landing-upload-button" for="landing-photo"><span id="landing-photo-action">Выбрать фотографию</span><input id="landing-photo" class="landing-file-input" type="file" accept="image/png,image/jpeg,image/webp"></label><p id="landing-photo-name">Фотография ещё не добавлена</p><small>PNG, JPG или WebP · до 5 МБ</small></div></div><small>Лучше всего подойдёт портрет с прозрачным фоном. Ник и логотип EFIR появятся автоматически.</small></section><h2>Кнопки и ссылки</h2><div id="landing-items"></div><button type="button" class="landing-add" id="landing-add">+ Добавить кнопку</button><section class="landing-rules-editor"><label class="landing-rules-toggle"><input id="landing-rules-enabled" type="checkbox" ${doc.rulesEnabled?'checked':''}><span>Показывать кнопку «Правила таймера»</span></label><label id="landing-rules-field" ${doc.rulesEnabled?'':'hidden'}>Правила вашего таймера<textarea id="landing-rules-text" maxlength="10000" placeholder="Опишите, как подарки меняют время и какие правила действуют на вашем стриме." ${doc.rulesEnabled?'required':''}>${L.esc(doc.rulesText||'')}</textarea><small>Этот текст увидят зрители, открыв «Правила таймера». Переносы строк сохраняются.</small></label></section><div class="landing-actions"><button type="submit">Сохранить черновик</button><button type="button" class="landing-publish" id="landing-publish">Опубликовать</button><button type="button" id="landing-unpublish" ${state.published?'':'hidden'}>Снять с публикации</button></div></fieldset><p class="landing-status" role="status" aria-live="polite"></p><button type="button" class="landing-public-link" id="landing-open-public" ${state.published?'':'hidden'}></button><small>Изменения черновика появятся на странице только после публикации.</small></form><aside class="landing-preview-wrap"><p>ПРЕДПРОСМОТР</p><iframe class="landing-preview-frame" title="Предпросмотр лендинга" src="landing-preview.html" sandbox="allow-scripts allow-same-origin"></iframe></aside></div>`;
+  rows();publishedLink();updatePhoto();
   const frame=overlay.querySelector('iframe');frame.addEventListener('load',preview);
   overlay.querySelector('#landing-close').onclick=()=>{if(!busy&&(!dirty||window.confirm('Закрыть без сохранения изменений?'))){overlay.hidden=true;dirty=false;}};
-  overlay.querySelector('#landing-open-public').onclick=()=>window.launcher.openExternal('https://efirlive.pro/u/'+state.published.slug);
+  overlay.querySelector('#landing-open-public').onclick=()=>window.launcher.openExternal('https://efirlive.pro/'+state.published.slug);
   overlay.querySelector('#landing-nickname').oninput=event=>{
    if(!state.draft&&!overlay.querySelector('#landing-slug').dataset.edited){overlay.querySelector('#landing-slug').value=event.target.value.toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,40);}
   };
   overlay.querySelector('#landing-slug').oninput=event=>{event.target.dataset.edited='true';};
   overlay.querySelector('form').addEventListener('input',event=>{if(event.target.type==='file')return;read();dirty=true;updateHints();schedulePreview();});
   overlay.querySelector('#landing-photo').onchange=selectPhoto;
+  overlay.querySelector('#landing-rules-enabled').onchange=()=>{read();const enabled=doc.rulesEnabled;overlay.querySelector('#landing-rules-field').hidden=!enabled;overlay.querySelector('#landing-rules-text').required=enabled;dirty=true;preview();};
   overlay.querySelector('#landing-add').onclick=()=>{read();if(doc.items.length>=24)return message('Можно добавить до 24 кнопок.',true);doc.items.push({type:'link',title:'',subtitle:'',value:''});dirty=true;rows();preview();};
   overlay.querySelector('form').onsubmit=event=>{event.preventDefault();save('draft');};
   overlay.querySelector('#landing-publish').onclick=()=>save('publish');
@@ -51,6 +52,7 @@
  }
  function read(){
   doc.nickname=overlay.querySelector('#landing-nickname').value.trim();doc.slug=overlay.querySelector('#landing-slug').value.trim().toLowerCase();
+  doc.rulesEnabled=overlay.querySelector('#landing-rules-enabled').checked;doc.rulesText=overlay.querySelector('#landing-rules-text').value;
   doc.items=[...overlay.querySelectorAll('.landing-row')].map(row=>Object.fromEntries(['type','title','subtitle','value'].map(key=>[key,row.querySelector('[data-field="'+key+'"]').value])));
   overlay.querySelector('#landing-slug-hint').textContent=doc.slug||'ваш-ник';
  }
@@ -64,7 +66,13 @@
  function updateHints(){overlay.querySelectorAll('.landing-row').forEach((row,i)=>{const item=doc.items[i];const kind=L.iconType(item);row.querySelector('.landing-icon-hint').innerHTML=L.icon(kind)+'<span>'+(kind==='card'?'Банковская карта: 16 цифр':kind==='copy'?'Кнопка копирования':'Иконка определяется по ссылке')+'</span>';});}
  function schedulePreview(){clearTimeout(previewTimer);previewTimer=setTimeout(preview,120);}
  function preview(){overlay.querySelector('iframe')?.contentWindow.postMessage({type:'efir-landing-preview',document:doc,photo:photoPreview},'*');}
- function publishedLink(){const b=overlay.querySelector('#landing-open-public');b.hidden=!state.published;b.textContent=state.published?'Открыть: efirlive.pro/u/'+state.published.slug+' ↗':'';overlay.querySelector('#landing-unpublish').hidden=!state.published;}
+ function updatePhoto(){
+  const photo=photoPreview||L.photoUrl(doc.photo),thumb=overlay.querySelector('#landing-photo-thumb');thumb.hidden=!photo;if(photo)thumb.src=photo;
+  overlay.querySelector('#landing-photo-empty').hidden=!!photo;
+  overlay.querySelector('#landing-photo-action').textContent=photo?'Заменить фотографию':'Выбрать фотографию';
+  overlay.querySelector('#landing-photo-name').textContent=pendingPhoto?.name||(photo?'Текущая фотография лендинга':'Фотография ещё не добавлена');
+ }
+ function publishedLink(){const b=overlay.querySelector('#landing-open-public');b.hidden=!state.published;b.textContent=state.published?'Открыть: efirlive.pro/'+state.published.slug+' ↗':'';overlay.querySelector('#landing-unpublish').hidden=!state.published;}
  async function selectPhoto(event){
   const file=event.target.files[0];if(!file)return;
   if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>5242880){event.target.value='';return message('Выберите PNG, JPG или WebP размером до 5 МБ.',true);}
@@ -72,7 +80,7 @@
   try{
    const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(file);});
    await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>image.naturalWidth>0&&image.naturalWidth<=6000&&image.naturalHeight<=6000?resolve():reject();image.onerror=reject;image.src=data;});
-   if(id!==requestId)return;pendingPhoto=file;photoPreview=data;dirty=true;message('Фотография добавлена в предпросмотр. Сохраните или опубликуйте лендинг.');preview();
+   if(id!==requestId)return;pendingPhoto=file;photoPreview=data;dirty=true;updatePhoto();message('Фотография добавлена в предпросмотр. Сохраните или опубликуйте лендинг.');preview();
   }catch{message('Не удалось открыть фотографию. Максимальная сторона — 6000 пикселей.',true);event.target.value='';}
   finally{setBusy(false);}
  }

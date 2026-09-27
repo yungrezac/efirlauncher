@@ -3,6 +3,7 @@
  const origin='https://qpoyojxupblhjeqbvqfr.supabase.co/storage/v1/object/public/creator-portraits/';
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const paths={
+  timer:'<path d="M8 3h8M12 3v3m6-1 2 2M12 10v4l2 1"/><circle cx="12" cy="14" r="7"/>',
   link:'<path d="m10 13 4-4m-7 6-2 2a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m0 2 2-2a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0" transform="translate(3 -1)"/>',
   telegram:'<path d="m21 3-5 18-5-7-8-4 18-7Zm0 0L11 14m0 0-1 6 3-3"/>',
   twitch:'<path d="M4 3h17v12l-5 5h-5l-4 3v-3H3V7Zm4 0v13h4v3l3-3h3l3-3M12 7v5m5-5v5"/>',
@@ -26,7 +27,7 @@
   return 'link';
  }
  const icon=type=>'<svg viewBox="0 0 24 24" aria-hidden="true">'+(paths[type]||paths.link)+'</svg>';
- function photoUrl(photo){return /^[0-9a-f-]{36}\/[0-9a-f-]{36}\.(png|jpg|webp)$/.test(photo||'')?origin+photo:'';}
+ function photoUrl(photo){if(/^\/assets\/creators\/(astral|sinabon|darisha|violla)\.png$/.test(photo||''))return 'https://efirlive.pro'+photo;return /^[0-9a-f-]{36}\/[0-9a-f-]{36}\.(png|jpg|webp)$/.test(photo||'')?origin+photo:'';}
  function render(doc,{logo='/assets/favicon.svg',photoOverride=''}={}){
   const nickname=String(doc.nickname||'ВАШ НИК');
   const photo=/^data:image\/(png|jpeg|webp);base64,/.test(photoOverride)?photoOverride:photoUrl(doc.photo);
@@ -37,7 +38,8 @@
    if(item.type==='copy')return '<button class="lp-card" type="button" data-copy-value="'+esc(number||item.value)+'">'+content+'</button>';
    const url=safeUrl(item.value);return url?'<a class="lp-card" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+content+'</a>':'';
   }).join('');
-  return '<main class="lp-page"><section class="lp-hero"><div class="lp-halo"></div><div class="lp-orbit"></div><div class="lp-photo">'+(photo?'<img src="'+esc(photo)+'" alt="'+esc(nickname)+'" fetchpriority="high">':'<div class="lp-photo-placeholder">Добавьте фотографию</div>')+'</div><header class="lp-identity"><span>НА СВЯЗИ</span><h1 style="--name-size:'+Math.max(15,Math.min(38,210/Math.max(nickname.length,6)))+'px">'+esc(nickname)+'<b>.</b></h1><i></i></header><a class="lp-brand" href="https://efirlive.pro/" target="_blank" rel="noopener noreferrer" aria-label="EFIR launcher"><img src="'+esc(logo)+'" alt=""><span><strong>EFIR</strong><small>launcher</small></span></a></section><section class="lp-panel"><div class="lp-heading">ВСЁ НУЖНОЕ — ЗДЕСЬ <span aria-hidden="true">✳</span></div><div class="lp-list">'+(cards||'<p class="lp-empty">Здесь появятся ваши кнопки</p>')+'</div><p class="lp-status" role="status" aria-live="polite"></p></section><footer class="lp-footer"><a href="https://efirlive.pro/" target="_blank" rel="noopener noreferrer">СОЗДАНО С <strong>EFIR</strong> ↗</a></footer></main>';
+  const rules=doc.rulesEnabled===true&&String(doc.rulesText||'').trim()?'<details class="lp-rules"><summary>'+icon('timer')+'<span>Правила таймера</span><b aria-hidden="true">+</b></summary><div class="lp-rules-text">'+esc(doc.rulesText)+'</div></details>':'';
+  return '<main class="lp-page"><section class="lp-hero"><div class="lp-halo"></div><div class="lp-orbit"></div><div class="lp-photo">'+(photo?'<img src="'+esc(photo)+'" alt="'+esc(nickname)+'" fetchpriority="high">':'<div class="lp-photo-placeholder">Добавьте фотографию</div>')+'</div><header class="lp-identity"><span>НА СВЯЗИ</span><h1 style="--name-size:'+Math.max(15,Math.min(38,210/Math.max(nickname.length,6)))+'px">'+esc(nickname)+'<b>.</b></h1><i></i></header><a class="lp-brand" href="https://efirlive.pro/" target="_blank" rel="noopener noreferrer" aria-label="EFIR launcher"><img src="'+esc(logo)+'" alt=""><span><strong>EFIR</strong><small>launcher</small></span></a></section><section class="lp-panel"><div class="lp-heading">ВСЁ НУЖНОЕ — ЗДЕСЬ <span aria-hidden="true">✳</span></div><div class="lp-list">'+(cards||'<p class="lp-empty">Здесь появятся ваши кнопки</p>')+'</div>'+rules+'<p class="lp-status" role="status" aria-live="polite"></p></section><footer class="lp-footer"><a href="https://efirlive.pro/" target="_blank" rel="noopener noreferrer">СОЗДАНО С <strong>EFIR</strong> ↗</a></footer></main>';
  }
  return {esc,cardNumber,safeUrl,iconType,icon,photoUrl,render};
 });
