@@ -5,10 +5,10 @@
  const nav=document.createElement('button');nav.id='landing-nav';nav.textContent='Мой лендинг';nav.hidden=true;
  document.querySelector('#store .topbar nav').append(nav);
  const overlay=document.createElement('section');overlay.className='landing-overlay';overlay.hidden=true;overlay.setAttribute('aria-label','Конструктор лендинга');document.body.append(overlay);
- let owner=null,state=null,doc=null,pendingPhoto=null,photoPreview='',dirty=false,busy=false,requestId=0,previewTimer,editing=false,slideTimer,statsRequest=0,previousNav=null;
+ let owner=null,state=null,doc=null,pendingPhoto=null,photoPreview='',dirty=false,busy=false,requestId=0,previewTimer,editing=false,slideTimer,statsRequest=0,previousNav=null,hintToken=0,previewRevision=0;
  const blank=()=>({nickname:'',slug:'',photo:'',items:[],rulesEnabled:false,rulesText:''});
  const message=(text,error=false)=>{const node=overlay.querySelector('.landing-status');if(node){node.textContent=text;node.classList.toggle('error',error);}};
- const errors={SLUG_RESERVED:'Этот адрес закреплён за страницей сайта. Выберите другой.',INVALID_RULES:'Правила могут содержать до 10 000 символов.',RULES_REQUIRED:'Напишите правила таймера или выключите кнопку правил.',LANDING_ACCESS_REQUIRED:'Доступ к лендингу отозван. Обратитесь к администратору.',LANDING_CHANGED:'Лендинг изменён в другом окне. Закройте редактор и откройте его снова перед сохранением.',SLUG_TAKEN:'Этот адрес уже занят. Выберите другой.',INVALID_NICKNAME:'Введите ник от 1 до 32 символов.',INVALID_SLUG:'Адрес: от 3 до 40 латинских букв, цифр, дефисов или подчёркиваний.',INVALID_LINK:'Укажите полную ссылку, начинающуюся с https:// или http://.',PHOTO_AND_BUTTON_REQUIRED:'Для публикации добавьте фотографию и хотя бы одну кнопку.',INVALID_PHOTO:'Фотография не загрузилась. Выберите её снова.',INVALID_BUTTON:'Проверьте название и содержимое каждой кнопки.',TOO_MANY_BUTTONS:'Можно добавить до 24 кнопок.'};
+ const errors={INVALID_LAYOUT:'Не удалось сохранить расположение. Сбросьте его в предпросмотре и попробуйте снова.',SLUG_RESERVED:'Этот адрес закреплён за страницей сайта. Выберите другой.',INVALID_RULES:'Правила могут содержать до 10 000 символов.',RULES_REQUIRED:'Напишите правила таймера или выключите кнопку правил.',LANDING_ACCESS_REQUIRED:'Доступ к лендингу отозван. Обратитесь к администратору.',LANDING_CHANGED:'Лендинг изменён в другом окне. Закройте редактор и откройте его снова перед сохранением.',SLUG_TAKEN:'Этот адрес уже занят. Выберите другой.',INVALID_NICKNAME:'Введите ник от 1 до 32 символов.',INVALID_SLUG:'Адрес: от 3 до 40 латинских букв, цифр, дефисов или подчёркиваний.',INVALID_LINK:'Укажите полную ссылку, начинающуюся с https:// или http://.',PHOTO_AND_BUTTON_REQUIRED:'Для публикации добавьте фотографию и хотя бы одну кнопку.',INVALID_PHOTO:'Фотография не загрузилась. Выберите её снова.',INVALID_BUTTON:'Проверьте название и содержимое каждой кнопки.',TOO_MANY_BUTTONS:'Можно добавить до 24 кнопок.'};
  function errorText(error){return Object.entries(errors).find(([key])=>String(error.message).includes(key))?.[1]||'Не удалось сохранить. Проверьте подключение и повторите попытку.';}
  function clear(){clearInterval(slideTimer);statsRequest++;nav.classList.remove('nav-active');requestId++;owner=null;state=null;doc=null;pendingPhoto=null;photoPreview='';dirty=false;nav.hidden=true;overlay.hidden=true;overlay.replaceChildren();}
  async function refreshAccess(){
@@ -98,7 +98,19 @@
  }
  function updateHints(){overlay.querySelectorAll('.landing-row').forEach((row,i)=>{const item=doc.items[i];const kind=L.iconType(item);row.querySelector('.landing-icon-hint').innerHTML=L.icon(kind)+'<span>'+(kind==='card'?'Банковская карта: 16 цифр':kind==='copy'?'Кнопка копирования':'Иконка определяется по ссылке')+'</span>';});}
  function schedulePreview(){clearTimeout(previewTimer);previewTimer=setTimeout(preview,120);}
- function preview(){overlay.querySelector('iframe')?.contentWindow.postMessage({type:'efir-landing-preview',document:doc,photo:photoPreview},'*');}
+ function preview(){overlay.querySelector('iframe')?.contentWindow.postMessage({type:'efir-landing-preview',document:doc,photo:photoPreview,editing,busy,hintToken,revision:++previewRevision},'*');}
+ window.addEventListener('message',event=>{
+  const frame=overlay.querySelector('iframe');
+  if(event.source!==frame?.contentWindow||overlay.hidden||!editing||busy||!doc||event.data?.type!=='efir-landing-layout'||event.data.revision!==previewRevision)return;
+  const layout=event.data.layout;
+  if(!layout||typeof layout!=='object')return;
+  // The frame is our own sandboxed editor; only accept bounded numeric geometry.
+  const clean={};
+  if(Number.isFinite(layout.panelOffset))clean.panelOffset=Math.max(-.55,Math.min(.4,layout.panelOffset));
+  const n=layout.identity;
+  if(n&&['x','y','scale'].every(k=>Number.isFinite(n[k])))clean.identity={x:Math.max(0,Math.min(1,n.x)),y:Math.max(0,Math.min(1.5,n.y)),scale:Math.max(.5,Math.min(2.5,n.scale))};
+  doc.layout=clean;dirty=true;
+ });
  function updatePhoto(){
   const photo=photoPreview||L.photoUrl(doc.photo),thumb=overlay.querySelector('#landing-photo-thumb');thumb.hidden=!photo;if(photo)thumb.src=photo;
   overlay.querySelector('#landing-photo-empty').hidden=!!photo;
@@ -115,11 +127,11 @@
    if(signature.length!==8||![137,80,78,71,13,10,26,10].every((v,i)=>signature[i]===v))throw new Error('PNG_REQUIRED');
    const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(file);});
    await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>image.naturalWidth>0&&image.naturalWidth<=6000&&image.naturalHeight<=6000?resolve():reject();image.onerror=reject;image.src=data;});
-   if(id!==requestId)return;pendingPhoto=file;photoPreview=data;dirty=true;updatePhoto();message('Фотография добавлена в предпросмотр. Сохраните или опубликуйте лендинг.');preview();
+   if(id!==requestId)return;pendingPhoto=file;photoPreview=data;hintToken++;dirty=true;updatePhoto();message('Фотография добавлена в предпросмотр. Сохраните или опубликуйте лендинг.');preview();
   }catch(error){message(error?.message==='PNG_REQUIRED'?'Это не PNG. Сохраните фотографию в формате PNG и выберите её снова.':'Не удалось открыть фотографию. Максимальная сторона — 6000 пикселей.',true);event.target.value='';}
   finally{setBusy(false);}
  }
- function setBusy(value){busy=value;const fieldset=overlay.querySelector('fieldset');if(fieldset)fieldset.disabled=value;overlay.querySelectorAll('.landing-top button').forEach(b=>b.disabled=value);}
+ function setBusy(value){busy=value;const fieldset=overlay.querySelector('fieldset');if(fieldset)fieldset.disabled=value;overlay.querySelectorAll('.landing-top button').forEach(b=>b.disabled=value);overlay.querySelector('iframe')?.contentWindow.postMessage({type:'efir-landing-busy',busy:value},'*');}
  async function save(action){
   if(busy)return;
   const form=overlay.querySelector('form');if(action!=='unpublish'&&!form.reportValidity())return;
