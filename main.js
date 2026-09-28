@@ -336,8 +336,8 @@ async function installOrUpdate(item, win, forceUpdate = false) {
   writeLog('application update completed', { id: item.id, version: release.tag_name, asset: downloadedAsset.name });
   return { version: release.tag_name, delta: downloadedAsset.name.toLowerCase() === 'update.zip' };
 }
-async function check(item) {
-  const release = await latest(item);
+async function check(item, refresh = false) {
+  const release = await latest(item, refresh);
   const savedVersion = state[item.id]?.version || null;
   const installedOnDisk = Boolean(await findExecutable(item));
   const installed = savedVersion || (installedOnDisk ? 'локально' : null);
@@ -497,7 +497,7 @@ app.whenReady().then(() => {
   ipcMain.handle('window:close', () => mainWindow.hide());
   ipcMain.handle('apps:list', async () => Promise.all(catalogItems.map(async item => { const status = await check(item).catch(error => ({ error: error.message, installed: state[item.id]?.version || null, installedOnDisk: diskFs.existsSync(path.join(appDir(item), 'resources', 'app.asar')) })); return { ...item, ...status, licenseAvailable: await checkLicense(item.id).catch(() => null) }; })));
   ipcMain.handle('apps:status', async () => Promise.all(statusItems().map(async item => ({ id: item.id, installedVersion: state[item.id]?.version || null, installedOnDisk: Boolean(await findExecutable(item)), running: await isRunning(item), licenseAvailable: await checkLicense(item.id).catch(() => null) }))));
-  ipcMain.handle('app:status', async (_e, item, options = {}) => ({ ...(options.checkRelease ? await check(item).catch(() => ({})) : {}), id: item.id, installedVersion: state[item.id]?.version || null, installedOnDisk: Boolean(await findExecutable(item)), running: await isRunning(item), licenseAvailable: item?.id ? await checkLicense(item.id).catch(() => null) : false }));
+  ipcMain.handle('app:status', async (_e, item, options = {}) => ({ ...(options.checkRelease ? await check(item, options.forceRelease === true).catch(error => ({ error: error.message })) : {}), id: item.id, installedVersion: state[item.id]?.version || null, installedOnDisk: Boolean(await findExecutable(item)), running: await isRunning(item), licenseAvailable: item?.id ? await checkLicense(item.id).catch(() => null) : false }));
   async function requireSubscription(item) { await presence.ensure(); if (!item?.id || !(await checkLicense(item.id))) throw new Error('Активная подписка необходима для скачивания и запуска приложения'); }
   async function installApplication(payload, update = false) {
     let stage = 'access';

@@ -369,15 +369,18 @@ async function getRemoteAppData(local) {
   apps.forEach(item => { if (item.latest) appVersions.set(item.id, item.latest); });
   renderApps(); $('#status').textContent = 'Готово';
 }
-async function reloadStoreCatalog() {
+async function reloadStoreCatalog({ checkRelease = false } = {}) {
   const revisions = new Map(appStatusRevisions);
   const result = await supabase.from('store_apps').select('*, store_media(*)').order('created_at', { ascending: false });
   if (result.error) throw result.error;
   const source = Array.isArray(result.data) ? result.data : [];
-  const enriched = await Promise.all(source.map(async item => { const status = await window.launcher.getAppStatus(item); const previous = apps.find(current => current.id === item.id); const licenseAvailable = status.licenseAvailable === null || status.licenseAvailable === undefined ? previous?.licenseAvailable : status.licenseAvailable; return fallbackApp({ ...previous, ...item, media: item.store_media || [] }, { ...status, licenseAvailable, installed: status.installedVersion || (status.installedOnDisk ? previous?.installed || 'локально' : null) }); }));
+  const enriched = await Promise.all(source.map(async item => { const status = await window.launcher.getAppStatus(item, { checkRelease, forceRelease: checkRelease }); const previous = apps.find(current => current.id === item.id); const licenseAvailable = status.licenseAvailable === null || status.licenseAvailable === undefined ? previous?.licenseAvailable : status.licenseAvailable; return fallbackApp({ ...previous, ...item, media: item.store_media || [] }, { ...status, error: status.error || null, licenseAvailable, installed: status.installedVersion || (status.installedOnDisk ? previous?.installed || 'локально' : null) }); }));
   apps = preserveCompletedOperations(enriched, revisions);
   applySubscriptionAccess();
   renderApps(); $('#status').textContent = 'Каталог обновлён';
+  apps.forEach(item => { if (item.latest) appVersions.set(item.id, item.latest); });
+  if (selectedAppId && !$('#detail-view').classList.contains('hidden') && apps.some(item => item.id === selectedAppId)) renderDetail(selectedAppId);
+  return { updates: apps.filter(item => item.update).length, failed: enriched.filter(item => item.error).length };
 }
 // Проверяем обновления после фоновой синхронизации каталога.
 let catalogChannel;
