@@ -96,7 +96,7 @@
    row.querySelector('[data-remove]').onclick=()=>{read();doc.items.splice(index,1);dirty=true;rows();preview();};
   });updateHints();
  }
- function updateHints(){overlay.querySelectorAll('.landing-row').forEach((row,i)=>{const item=doc.items[i];const kind=L.iconType(item);const service={donatex:'DonateX',efir:'EFIR',telegram:'Telegram',twitch:'Twitch',youtube:'YouTube',instagram:'Instagram',tiktok:'TikTok',donation:'DonationAlerts',money:'ЮMoney',discord:'Discord'}[kind];row.querySelector('.landing-icon-hint').innerHTML=L.icon(kind)+'<span>'+(kind==='card'?'Банковская карта: 16 цифр':kind==='copy'?'Кнопка копирования':service?service+' · иконка в стиле EFIR':'Иконка ссылки')+'</span>';});}
+ function updateHints(){overlay.querySelectorAll('.landing-row').forEach((row,i)=>{const item=doc.items[i];const kind=L.iconType(item);const service={donatex:'DonateX',efir:'EFIR',telegram:'Telegram',twitch:'Twitch',youtube:'YouTube',instagram:'Instagram',tiktok:'TikTok',donation:'DonationAlerts',money:'ЮMoney',discord:'Discord'}[kind];row.querySelector('.landing-icon-hint').innerHTML=L.linkIcon(item)+'<span>'+(kind==='card'?'Банковская карта: 16 цифр':kind==='copy'?'Кнопка копирования':service?service+' · иконка в стиле EFIR':L.safeUrl(item.value)?'Логотип сайта · в стиле EFIR':'Иконка ссылки')+'</span>';});}
  function schedulePreview(){clearTimeout(previewTimer);previewTimer=setTimeout(preview,120);}
  function preview(){overlay.querySelector('iframe')?.contentWindow.postMessage({type:'efir-landing-preview',document:doc,photo:photoPreview,editing,busy,hintToken,revision:++previewRevision},'*');}
  window.addEventListener('message',event=>{

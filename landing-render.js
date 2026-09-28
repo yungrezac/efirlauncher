@@ -30,6 +30,12 @@
   return 'link';
  }
  const icon=type=>'<svg viewBox="0 0 24 24" aria-hidden="true">'+(paths[type]||paths.link)+'</svg>';
+ function linkIcon(item){
+  const kind=iconType(item),url=safeUrl(item.value);
+  if(!['link','donation','money'].includes(kind)||item.type==='copy'||!url)return icon(kind);
+  const host=new URL(url).hostname;
+  return '<span class="lp-site-icon" aria-hidden="true">'+icon('link')+'<img data-site-icon src="https://efirlive.pro/api/link-icon?host='+esc(encodeURIComponent(host))+'" alt="" decoding="async" referrerpolicy="no-referrer"></span>';
+ }
  function photoUrl(photo){if(/^\/assets\/creators\/(astral|sinabon|darisha|violla)\.png$/.test(photo||''))return 'https://efirlive.pro'+photo;return /^[0-9a-f-]{36}\/[0-9a-f-]{36}\.(png|jpg|webp)$/.test(photo||'')?origin+photo:'';}
  function render(doc,{logo='/assets/favicon.svg',photoOverride=''}={}){
   const nickname=String(doc.nickname||'ВАШ НИК');
@@ -37,12 +43,12 @@
   const cards=(Array.isArray(doc.items)?doc.items:[]).map(item=>{
    const type=iconType(item),number=item.type==='copy'?cardNumber(item.value):null;
    const subtitle=number?number.replace(/(.{4})(?=.)/g,'$1 '):item.subtitle||(item.type==='copy'?item.value:'');
-   const content='<span class="lp-icon">'+icon(type)+'</span><span class="lp-copy"><strong>'+esc(item.title)+'</strong><small>'+esc(subtitle)+'</small>'+(number?'<em>Банковская карта · скопировать номер</em>':'')+'</span><span class="lp-arrow" aria-hidden="true">'+(item.type==='copy'?icon('copy'):'↗')+'</span>';
+   const content='<span class="lp-icon">'+linkIcon(item)+'</span><span class="lp-copy"><strong>'+esc(item.title)+'</strong><small>'+esc(subtitle)+'</small>'+(number?'<em>Банковская карта · скопировать номер</em>':'')+'</span><span class="lp-arrow" aria-hidden="true">'+(item.type==='copy'?icon('copy'):'↗')+'</span>';
    if(item.type==='copy')return '<button class="lp-card" data-button-id="'+esc(item.id||'')+'" type="button" data-copy-value="'+esc(number||item.value)+'">'+content+'</button>';
    const url=safeUrl(item.value);return url?'<a class="lp-card" data-button-id="'+esc(item.id||'')+'" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">'+content+'</a>':'';
   }).join('');
   const rules=doc.rulesEnabled===true&&String(doc.rulesText||'').trim()?'<details class="lp-rules"><summary>'+icon('timer')+'<span>Правила таймера</span><b aria-hidden="true">+</b></summary><div class="lp-rules-text">'+esc(doc.rulesText)+'</div></details>':'';
   return '<main class="lp-page" data-layout="'+esc(JSON.stringify(doc.layout||{}))+'"><section class="lp-hero"><div class="lp-halo"></div><div class="lp-orbit"></div><div class="lp-photo">'+(photo?'<img crossorigin="anonymous" src="'+esc(photo)+'" alt="'+esc(nickname)+'" fetchpriority="high">':'<div class="lp-photo-placeholder">Добавьте фотографию</div>')+'</div><header class="lp-identity"><span>НА СВЯЗИ</span><h1 style="--name-size:'+Math.max(15,Math.min(38,210/Math.max(nickname.length,6)))+'px">'+esc(nickname)+'<b>.</b></h1><i></i></header><a class="lp-brand" href="https://efirlive.pro/" target="_blank" rel="noopener noreferrer" aria-label="EFIR launcher"><img src="'+esc(logo)+'" alt=""><span><strong>EFIR</strong><small>launcher</small></span></a></section><section class="lp-panel"><div class="lp-heading">ВСЁ НУЖНОЕ — ЗДЕСЬ <span aria-hidden="true">✳</span></div><div class="lp-list">'+(cards||'<p class="lp-empty">Здесь появятся ваши кнопки</p>')+'</div>'+rules+'<p class="lp-status" role="status" aria-live="polite"></p></section><footer class="lp-footer"><a href="https://efirlive.pro/" target="_blank" rel="noopener noreferrer">СОЗДАНО С <strong>EFIR</strong> ↗</a></footer></main>';
  }
- return {esc,cardNumber,safeUrl,iconType,icon,photoUrl,render};
+ return {esc,cardNumber,safeUrl,iconType,icon,linkIcon,photoUrl,render};
 });
