@@ -18,8 +18,8 @@
     result.textContent = 'Обновляем каталог и проверяем версии…';
     try {
       const [catalog, launcher] = await Promise.allSettled([
-        reloadStoreCatalog({ checkRelease: true }),
-        window.launcher.checkSelfUpdate()
+        Promise.resolve().then(() => window.efirCatalog.refresh()),
+        Promise.resolve().then(() => window.launcher.checkSelfUpdate())
       ]);
       const failed = catalog.status === 'rejected' || catalog.value.failed > 0 || launcher.status === 'rejected' || launcher.value?.phase === 'error';
       const updates = (catalog.status === 'fulfilled' ? catalog.value.updates : 0) + (launcher.status === 'fulfilled' && ['available', 'downloading', 'ready'].includes(launcher.value?.phase) ? 1 : 0);

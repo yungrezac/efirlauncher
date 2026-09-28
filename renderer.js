@@ -382,6 +382,9 @@ async function reloadStoreCatalog({ checkRelease = false } = {}) {
   if (selectedAppId && !$('#detail-view').classList.contains('hidden') && apps.some(item => item.id === selectedAppId)) renderDetail(selectedAppId);
   return { updates: apps.filter(item => item.update).length, failed: enriched.filter(item => item.error).length };
 }
+// The header is a separate script; keep renderer state private and expose only
+// the manual refresh operation across that script boundary.
+window.efirCatalog = Object.freeze({ refresh: () => reloadStoreCatalog({ checkRelease: true }) });
 // Проверяем обновления после фоновой синхронизации каталога.
 let catalogChannel;
 let catalogPollTimer;
