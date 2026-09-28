@@ -3,6 +3,9 @@
  const origin='https://qpoyojxupblhjeqbvqfr.supabase.co/storage/v1/object/public/creator-portraits/';
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const paths={
+  // DonateX's official logo.svg silhouette, recolored with the landing accent.
+  donatex:'<circle cx="12" cy="12" r="10.7" stroke-width=".8"/><g fill="currentColor" stroke="none" transform="translate(.5 .5) scale(.01468)"><path d="M783.5 634.3 553.8 346.4c-7.6-9.5-19.1-15-31.3-15.1l-225-.1 364.4 455.4 121.6 152 232.6 290.7c7.7 9.6 19.3 15.1 31.6 15l221.2-2-363.7-455.6-121.7-152.4Z"/><path d="M908.6 746.5c4.1 4.8 18.3 3.5 22.3-1.3l344.2-414.9-216.4.1c-11.7 0-22.8 5.5-30.1 15.1L811.3 613.3c-3.5 4.3-3.4 10.5.2 14.8l97.1 118.4Z"/><path d="M640.5 819.9c-6.3-7.6-18-7.7-24.4-.1l-355.6 423.3 216.4-.3c11.8.1 26.5-9.1 33.9-18.6l223.9-269.6c3.4-4.2 6.6-12.7 3.2-16.9l-97.4-117.8Z"/></g>',
+  efir:'<path fill="currentColor" stroke="none" d="M4 3h16v4H9v4h9v4H9v2h11v4H4Z"/>',
   timer:'<path d="M8 3h8M12 3v3m6-1 2 2M12 10v4l2 1"/><circle cx="12" cy="14" r="7"/>',
   link:'<path d="m10 13 4-4m-7 6-2 2a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m0 2 2-2a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0" transform="translate(3 -1)"/>',
   telegram:'<path d="m21 3-5 18-5-7-8-4 18-7Zm0 0L11 14m0 0-1 6 3-3"/>',
@@ -23,7 +26,7 @@
   const u=safeUrl(item.value);if(!u)return 'link';const h=new URL(u).hostname.toLowerCase().replace(/^www\./,'');
   const match=d=>h===d||h.endsWith('.'+d);
   if(['t.me','telegram.me','telegram.org'].some(match))return 'telegram';
-  for(const [d,k] of [['twitch.tv','twitch'],['youtube.com','youtube'],['youtu.be','youtube'],['instagram.com','instagram'],['tiktok.com','tiktok'],['donationalerts.com','donation'],['dalink.to','donation'],['yoomoney.ru','money'],['discord.gg','discord'],['discord.com','discord']])if(match(d))return k;
+  for(const [d,k] of [['donatex.gg','donatex'],['efirlive.pro','efir'],['twitch.tv','twitch'],['youtube.com','youtube'],['youtu.be','youtube'],['instagram.com','instagram'],['tiktok.com','tiktok'],['donationalerts.com','donation'],['dalink.to','donation'],['yoomoney.ru','money'],['discord.gg','discord'],['discord.com','discord']])if(match(d))return k;
   return 'link';
  }
  const icon=type=>'<svg viewBox="0 0 24 24" aria-hidden="true">'+(paths[type]||paths.link)+'</svg>';
