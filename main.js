@@ -14,6 +14,13 @@ const { createSelfUpdate } = require('./self-update');
 app.setName('NNSI App');
 app.setPath('userData', path.join(app.getPath('appData'), 'NNSI App'));
 app.setPath('sessionData', app.getPath('userData'));
+// Acquire the profile lock before starting services or registering quit cleanup.
+// A duplicate must never start TikTok or shut down the first instance's apps.
+(() => {
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  return;
+}
 // Avoid Chromium disk-cache locking errors on Windows installations.
 app.commandLine.appendSwitch('disable-http-cache');
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
@@ -36,6 +43,16 @@ const licenseStatusCache = new Map();
 let launcherSettings = { autoUpdate: false, autoStart: false };
 let state = {};
 let mainWindow;
+let showWhenReady = false;
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) { showWhenReady = true; return; }
+  showWhenReady = false;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+app.on('second-instance', showMainWindow);
+app.on('activate', showMainWindow);
 let tray;
 let isQuitting = false;
 let selfUpdate;
@@ -383,8 +400,8 @@ function createWindow() {
 function createTray(win) {
   tray = new Tray(trayIcon());
   tray.setToolTip('EFIR launcher');
-  tray.setContextMenu(Menu.buildFromTemplate([{ label: 'Открыть лаунчер', click: () => { win.show(); win.focus(); } }, { type: 'separator' }, { label: 'Выйти', click: () => { isQuitting = true; app.quit(); } }]));
-  tray.on('click', () => { if (win.isVisible()) win.hide(); else { win.show(); win.focus(); } });
+  tray.setContextMenu(Menu.buildFromTemplate([{ label: 'Открыть лаунчер', click: showMainWindow }, { type: 'separator' }, { label: 'Выйти', click: () => { isQuitting = true; app.quit(); } }]));
+  tray.on('click', () => { if (win.isVisible() && !win.isMinimized()) win.hide(); else showMainWindow(); });
 }
 function closeLaunchedApps() {
   for (const pid of launchedPids) spawnSync('taskkill.exe', ['/PID', String(pid), '/T', '/F'], { windowsHide: true });
@@ -425,6 +442,7 @@ app.whenReady().then(() => {
   writeLog('launcher ready', { userData: app.getPath('userData'), platform: process.platform, electron: process.versions.electron });
   migrateLegacyData();
   loadState(); loadSettings(); loadCatalogCache(); mainWindow = createWindow(); createTray(mainWindow); if (process.argv.includes('--hidden')) mainWindow.hide();
+  if (showWhenReady) showMainWindow();
   tiktokService = require('./tiktok-service.cjs').startTikTokService(app, mainWindow, ipcMain);
   presence=require('./presence.cjs').createPresence({
     device:machineId,
@@ -573,3 +591,4 @@ app.whenReady().then(() => {
 });
 app.on('before-quit', () => { isQuitting = true; closeLaunchedApps(); });
 app.on('window-all-closed', event => { event.preventDefault(); });
+})();
