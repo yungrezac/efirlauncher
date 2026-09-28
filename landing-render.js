@@ -38,7 +38,7 @@
  }
  function photoUrl(photo){if(/^\/assets\/creators\/(astral|sinabon|darisha|violla)\.png$/.test(photo||''))return 'https://efirlive.pro'+photo;return /^[0-9a-f-]{36}\/[0-9a-f-]{36}\.(png|jpg|webp)$/.test(photo||'')?origin+photo:'';}
  function render(doc,{logo='/assets/favicon.svg',photoOverride=''}={}){
-  const nickname=String(doc.nickname||'ВАШ НИК');
+  const nickname=String(doc.nickname||'NIKNAME').toUpperCase();
   const photo=/^data:image\/(png|jpeg|webp);base64,/.test(photoOverride)?photoOverride:photoUrl(doc.photo);
   const cards=(Array.isArray(doc.items)?doc.items:[]).map(item=>{
    const type=iconType(item),number=item.type==='copy'?cardNumber(item.value):null;

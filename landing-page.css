@@ -7,3 +7,15 @@
 .lp-identity{width:max-content;max-width:30%;transform-origin:top left}
 .lp-brand{right:4%;left:auto;width:max-content;max-width:30%;transform-origin:top left}
 .lp-page{display:flow-root}
+
+/* EFIR scrollbars: native scrolling with the launcher palette. */
+html,body{scrollbar-width:thin;scrollbar-color:#65794b #101510}
+@supports selector(::-webkit-scrollbar){
+ html,body{scrollbar-width:auto;scrollbar-color:auto}
+ html::-webkit-scrollbar,body::-webkit-scrollbar{width:10px;height:10px}
+ html::-webkit-scrollbar-track,body::-webkit-scrollbar-track{background:#101510}
+ html::-webkit-scrollbar-thumb,body::-webkit-scrollbar-thumb{background:#65794b;border:3px solid #101510;border-radius:12px}
+ html::-webkit-scrollbar-thumb:hover,body::-webkit-scrollbar-thumb:hover{background:#a8cb69}
+ html::-webkit-scrollbar-thumb:active,body::-webkit-scrollbar-thumb:active{background:#d5fc6b}
+ html::-webkit-scrollbar-corner,body::-webkit-scrollbar-corner{background:#101510}
+}
