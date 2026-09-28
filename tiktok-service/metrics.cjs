@@ -4,12 +4,13 @@ class StreamMetrics {
  tick(){const now=this.now(),dt=this.live?Math.min(30,Math.max(0,(now-this.last)/1000)):0;this.last=now;if(this.current){this.current.seconds+=dt;if(this.viewers!==null){this.current.sampledSeconds+=dt;this.current.viewerSeconds+=dt*this.viewers;}}}
  status(s){this.tick();const live=s.status==='live'&&s.roomId;if(live&&(!this.current||this.current.roomId!==s.roomId||this.current.username!==s.username)){
   this.current={id:randomUUID(),username:s.username,roomId:s.roomId,nickname:s.nickname||s.username,avatar:s.avatar||'',seconds:0,viewerSeconds:0,sampledSeconds:0,peakViewers:0,diamonds:0,gifts:0,likes:0,follows:0};this.rows.push(this.current);this.rows=this.rows.slice(-20);this.seen.clear();this.combos.clear();this.viewers=null;
- }if(this.current&&this.current.username===s.username){this.current.nickname=s.nickname||this.current.nickname;this.current.avatar=s.avatar||this.current.avatar;}this.live=!!live;}
+ }if(this.current&&this.current.username===s.username){this.current.nickname=s.nickname||this.current.nickname;this.current.avatar=s.avatar||this.current.avatar;}if(!live||!this.live)this.viewers=null;this.live=!!live;}
  event(name,d={}){this.tick();const row=this.current;if(!row||!this.live)return;
   const finite=(v,fallback=0)=>Number.isFinite(Number(v))?Math.max(0,Number(v)):fallback;
   const gift=d.giftDetails||d.gift||{};
   const end=d.repeatEnd===undefined?true:![false,0,'0','false'].includes(d.repeatEnd);
-  if(name==='roomUser'){const count=Number(d.viewerCount);if(Number.isFinite(count)&&count>=0){this.viewers=count;row.peakViewers=Math.max(row.peakViewers,count);}return;}
+  // v3 raw events use total (current viewers); totalUser is cumulative visits.
+  if(name==='roomUser'){const raw=d.viewerCount??d.total;const count=raw===null||raw===undefined||raw===''?NaN:Number(raw);if(Number.isSafeInteger(count)&&count>=0){this.viewers=count;row.peakViewers=Math.max(row.peakViewers,count);}return;}
   const id=String(d.msgId||d.common?.msgId||'');const key=name+':'+id+(name==='gift'?':'+d.repeatCount+':'+!!d.repeatEnd:'');
   if(id){if(this.seen.has(key))return;this.seen.set(key,true);if(this.seen.size>10000)this.seen.delete(this.seen.keys().next().value);}
   if(name==='gift'){
