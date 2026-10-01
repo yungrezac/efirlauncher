@@ -2,64 +2,111 @@
 const crypto = require('node:crypto');
 const LOGIN_ORIGIN = 'https://license-server-production-8e69.up.railway.app';
 const CHECKOUT = 'https://web.tribute.tg/s/17SJ';
+const TELEGRAM_ORIGIN = 'https://oauth.telegram.org';
 function secureUrl(value) {
   try { const u = new URL(value); return u.protocol === 'https:' && !u.username && !u.password; } catch { return false; }
 }
-function createSubscriptionWindows({ BrowserWindow, session, parent, icon, show = true, onPaymentClosed = () => {} }) {
-  let partition, paymentWindow;
-  const windows = new Set();
-  function closeAll() { for (const win of [...windows]) if (!win.isDestroyed()) win.destroy(); }
-  function reset() { closeAll(); partition = undefined; }
-  function getPartition() {
-    if (!partition) {
-      partition = 'efir-subscription-' + crypto.randomUUID();
-      const isolated = session.fromPartition(partition);
-      isolated.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
-      isolated.setPermissionCheckHandler(() => false);
-      isolated.on('will-download', event => event.preventDefault());
-    }
-    return partition;
+function telegramLoginLink(value, source) {
+  try {
+    const u = new URL(value);
+    if(new URL(source).origin!==TELEGRAM_ORIGIN||u.protocol!=='tg:'||u.username||u.password||u.port||u.hash||!['','/'].includes(u.pathname))return false;
+    const keys=[...u.searchParams.keys()];
+    if(u.hostname==='resolve')return keys.length===2&&u.searchParams.get('domain')==='oauth'&&/^[A-Za-z0-9_-]{1,2048}$/.test(u.searchParams.get('startapp')||'');
+    return u.hostname==='login'&&keys.length===1
+      && (/^[A-Za-z0-9_=-]{16,2048}$/.test(u.searchParams.get('token') || '') || /^[0-9]{5,8}$/.test(u.searchParams.get('code') || ''));
+  } catch { return false; }
+}
+function createSubscriptionWindows({ WebContentsView, session, shell, parent, onState = () => {}, onPaymentClosed = () => {} }) {
+  let partition, mode = null, visible = null, error = '', closing = false, cancelPending;
+  const views = new Set(), stack = [];
+  function geometry() {
+    const [w,h] = parent.getContentSize(), width = Math.min(580, Math.max(280,w-40)), height = Math.min(780,Math.max(240,h-48));
+    return { x: Math.max(0,Math.round((w-width)/2)), y: Math.max(0,Math.round((h-height)/2)), width, height };
   }
-  function options(label) {
-    return { parent, title: label, width: 620, height: 820, minWidth: 420, minHeight: 600,
-      icon, backgroundColor: '#101510', autoHideMenuBar: true, show,
-      webPreferences: { partition: getPartition(), sandbox: true, contextIsolation: true,
-        nodeIntegration: false, nodeIntegrationInWorker: false, nodeIntegrationInSubFrames: false,
-        webSecurity: true, allowRunningInsecureContent: false, webviewTag: false } };
+  function update(extra={}) {
+    if(parent.isDestroyed())return;
+    const bounds=geometry();
+    if(visible&&!visible.webContents.isDestroyed())visible.setBounds({x:bounds.x+1,y:bounds.y+60,width:bounds.width-2,height:Math.max(1,bounds.height-106)});
+    onState({open:!!mode,mode,title:mode==='payment'?'Подписка Tribute':'Вход в Telegram',error,loading:!!mode&&!visible,
+      host:visible&&!visible.webContents.isDestroyed()?safeHost(visible.webContents.getURL()):'',bounds,scale:parent.webContents.getZoomFactor(),...extra});
   }
-  function protect(win, label) {
-    windows.add(win); win.setMenu(null);
-    win.on('closed', () => windows.delete(win));
-    win.webContents.on('will-attach-webview', event => event.preventDefault());
-    for (const eventName of ['will-navigate', 'will-redirect']) win.webContents.on(eventName, (event, url) => {
-      if (!secureUrl(url)) event.preventDefault();
+  function safeHost(url) { try{return new URL(url).hostname;}catch{return '';} }
+  function detach() { if(visible&&!parent.isDestroyed())parent.contentView.removeChildView(visible);visible=null; }
+  function display(view) { detach();visible=view;parent.contentView.addChildView(view);update();view.webContents.focus(); }
+  function closeAll(notify=false) {
+    const closedMode=mode,wasPayment=mode==='payment';mode=null;closing=true;cancelPending?.();cancelPending=null;detach();
+    for(const view of views)if(!view.webContents.isDestroyed())view.webContents.close({waitForBeforeUnload:false});
+    views.clear();stack.length=0;error='';closing=false;update({closedByUser:notify,closedMode});
+    if(notify&&wasPayment)onPaymentClosed();
+  }
+  function reset() { closeAll();partition=undefined; }
+  function preferences() {
+    if(!partition){partition='efir-subscription-'+crypto.randomUUID();const s=session.fromPartition(partition);
+      s.setPermissionRequestHandler((_wc,_permission,callback)=>callback(false));s.setPermissionCheckHandler(()=>false);
+      s.on('will-download',event=>event.preventDefault());}
+    return {partition,sandbox:true,contextIsolation:true,nodeIntegration:false,nodeIntegrationInWorker:false,nodeIntegrationInSubFrames:false,
+      webSecurity:true,allowRunningInsecureContent:false,webviewTag:false,backgroundThrottling:false};
+  }
+  function openTelegram(url, source) {
+    if(!telegramLoginLink(url,source))return false;
+    shell.openExternal(url).then(()=>{error='Подтвердите вход в Telegram. Если приложение не открылось, выберите вход по QR-коду.';update();})
+      .catch(()=>{error='Не удалось открыть приложение Telegram. Используйте вход по QR-коду.';update();});
+    return true;
+  }
+  function createView(options={}, coordinator=false) {
+    const view=new WebContentsView({...options,webPreferences:{...options.webPreferences,...preferences()}}), wc=view.webContents;
+    views.add(view);view.setBackgroundColor('#1b2329');
+    wc.on('will-attach-webview',e=>e.preventDefault());
+    const navigation=(event,url)=>{
+      const target=url||event.url;
+      if(!secureUrl(target)){event.preventDefault();openTelegram(target,wc.getURL());}
+      else if(coordinator&&new URL(target).origin!==LOGIN_ORIGIN)event.preventDefault();
+    };
+    wc.on('will-navigate',navigation);wc.on('will-redirect',navigation);
+    wc.on('will-frame-navigate',event=>{if(!event.isMainFrame&&!secureUrl(event.url)){event.preventDefault();
+      if(event.initiator?.url&&secureUrl(event.initiator.url)&&new URL(event.initiator.url).origin===TELEGRAM_ORIGIN)openTelegram(event.url,event.initiator.url);}});
+    wc.on('before-input-event',(event,input)=>{if(input.type==='keyDown'&&input.key==='Escape'){event.preventDefault();closeAll(true);}});
+    wc.on('did-navigate',()=>{if(view===visible){error='';update();}});
+    wc.on('did-fail-load',(_e,code,_description,_url,isMainFrame)=>{if(isMainFrame&&code!==-3&&mode){error='Не удалось загрузить страницу. Проверьте соединение и повторите вход.';update();}});
+    wc.on('destroyed',()=>{
+      views.delete(view);const index=stack.indexOf(view);if(index>=0)stack.splice(index,1);
+      if(!closing&&view===visible){detach();const previous=stack.at(-1);if(previous)display(previous);else update();}
     });
-    win.webContents.on('page-title-updated', event => event.preventDefault());
-    win.webContents.on('did-navigate', (_event, url) => {
-      if (secureUrl(url)) win.setTitle(label + ' — ' + new URL(url).hostname);
+    wc.setWindowOpenHandler(details=>{
+      if(openTelegram(details.url,wc.getURL()))return {action:'deny'};
+      if(!secureUrl(details.url)||views.size>=6||(coordinator&&new URL(details.url).origin!==TELEGRAM_ORIGIN))return {action:'deny'};
+      return {action:'allow',overrideBrowserWindowOptions:{webPreferences:preferences()},createWindow:options=>{
+        const child=createView(options);stack.push(child);display(child);
+        if(details.disposition==='background-tab')child.webContents.loadURL(details.url).catch(()=>{});
+        return child.webContents;
+      }};
     });
-    // Keep Telegram's window.opener/postMessage flow intact; every popup is isolated too.
-    win.webContents.setWindowOpenHandler(({url}) => secureUrl(url) && windows.size < 6
-      ? { action: 'allow', overrideBrowserWindowOptions: options(label) }
-      : { action: 'deny' });
-    win.webContents.on('did-create-window', child => protect(child, label));
-    return win;
+    return view;
   }
   async function openLogin(value) {
-    const u = new URL(value);
-    if (u.origin !== LOGIN_ORIGIN || !['/', '/v1/telegram/login'].includes(u.pathname) || !/^#[a-f0-9]{48}$/.test(u.hash) || u.search || u.username || u.password) throw Error('Некорректный адрес входа Telegram.');
-    reset(); // A new isolated session lets the user choose a different Telegram account.
-    const win = protect(new BrowserWindow(options('Вход в Telegram · EFIR')), 'Вход в Telegram · EFIR');
-    try { await win.loadURL(u.href); } catch { if (!win.isDestroyed()) win.destroy(); throw Error('Не удалось загрузить вход Telegram. Проверьте интернет и повторите попытку.'); }
+    const u=new URL(value);
+    if(u.origin!==LOGIN_ORIGIN||!['/','/v1/telegram/login'].includes(u.pathname)||!/^#[a-f0-9]{48}$/.test(u.hash)||u.search||u.username||u.password)throw Error('Некорректный адрес входа Telegram.');
+    reset();mode='login';update();
+    const root=createView({},true),wc=root.webContents;
+    const cancelled=new Promise((_,reject)=>{cancelPending=()=>reject(Error('Вход закрыт.'));});
+    try {
+      await Promise.race([cancelled,(async()=>{
+        await wc.loadURL(u.href);
+        // Keep the official opener/postMessage flow; only its popup is visible.
+        if(new URL(wc.getURL()).origin!==LOGIN_ORIGIN)throw Error('Некорректная страница входа.');
+        await wc.executeJavaScript(`new Promise((resolve,reject)=>{const end=Date.now()+10000;const run=()=>{const b=document.getElementById('login');if(b&&!b.disabled){b.click();resolve();}else if(Date.now()>end)reject(Error('Telegram недоступен. Повторите вход.'));else setTimeout(run,100);};run();})`,true);
+        if(!visible)throw Error('Не удалось открыть Telegram. Повторите вход.');
+      })()]);
+    } catch(e) { if(views.has(root)){closeAll();}throw e; }
+    finally { cancelPending=null; }
   }
   async function openPayment(value) {
-    if (value !== CHECKOUT) throw Error('Оплата недоступна. Сначала подтвердите Telegram.');
-    if (paymentWindow && !paymentWindow.isDestroyed()) { paymentWindow.show(); paymentWindow.focus(); return; }
-    const win = paymentWindow = protect(new BrowserWindow(options('Подписка Tribute · EFIR')), 'Подписка Tribute · EFIR');
-    win.once('close', () => onPaymentClosed());
-    win.once('closed', () => { if (paymentWindow === win) paymentWindow = null; });
-    try { await win.loadURL(CHECKOUT); } catch { if (!win.isDestroyed()) win.destroy(); throw Error('Не удалось загрузить Tribute. Проверьте интернет и повторите попытку.'); }
+    if(value!==CHECKOUT)throw Error('Сначала подтвердите Telegram.');
+    if(mode==='payment'){visible?.webContents.focus();return;}
+    closeAll();mode='payment';const view=createView();stack.push(view);display(view);
+    try{await view.webContents.loadURL(CHECKOUT);}catch{if(views.has(view)){error='Не удалось загрузить Tribute. Закройте окно и повторите попытку.';update();}}
   }
-  return { openLogin, openPayment, finishLogin: closeAll, reset };
+  parent.on('resize',()=>update());parent.webContents.on('zoom-changed',()=>update());parent.once('closed',reset);
+  return {openLogin,openPayment,finishLogin:()=>closeAll(),reset,close:()=>closeAll(true)};
 }
-module.exports = { createSubscriptionWindows, secureUrl };
+module.exports={createSubscriptionWindows,secureUrl,telegramLoginLink};

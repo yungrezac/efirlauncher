@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, session } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, Tray, Menu, nativeImage, shell, session } = require('electron');
 const { execFile, spawn, spawnSync } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -444,7 +444,9 @@ app.whenReady().then(() => {
   writeLog('launcher ready', { userData: app.getPath('userData'), platform: process.platform, electron: process.versions.electron });
   migrateLegacyData();
   loadState(); loadSettings(); loadCatalogCache(); mainWindow = createWindow(); createTray(mainWindow); if (process.argv.includes('--hidden')) mainWindow.hide();
-  subscriptionWindows=require('./subscription-windows.cjs').createSubscriptionWindows({BrowserWindow,session,parent:mainWindow,icon:path.join(__dirname,'assets','efir-logo.png'),onPaymentClosed:()=>{
+  subscriptionWindows=require('./subscription-windows.cjs').createSubscriptionWindows({WebContentsView,session,shell,parent:mainWindow,onState:state=>{
+    if(!mainWindow.isDestroyed())mainWindow.webContents.send('subscription:modal-state',state);
+  },onPaymentClosed:()=>{
     if(!mainWindow.isDestroyed())mainWindow.webContents.send('subscription:payment-closed');
   }});
   app.on('before-quit',()=>subscriptionWindows.reset());
@@ -551,6 +553,7 @@ app.whenReady().then(() => {
     await subscriptionWindows.openPayment(state.checkout_url);return true;
   }));
   ipcMain.handle('subscription:cancel-login', subscriptionHandler(() => {++telegramLoginAttempt;telegramLoginCode=null;subscriptionWindows.finishLogin();return true;}));
+  ipcMain.handle('subscription:close-modal', subscriptionHandler(() => {++telegramLoginAttempt;telegramLoginCode=null;subscriptionWindows.close();return true;}));
   ipcMain.handle('subscription:tribute-offer', subscriptionHandler(() => licenseRequest('GET', '/v1/subscription/tribute/offer')));
   ipcMain.handle('subscription:tribute-check', subscriptionHandler(async () => {const result=await licenseRequest('POST', '/v1/subscription/tribute/check', {});invalidateAccess();return result;}));
   ipcMain.handle('subscription:quote', (_e, months) => licenseRequest('GET', `/v1/subscription/quote?months=${encodeURIComponent(Number(months))}`));

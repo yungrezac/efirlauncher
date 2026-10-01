@@ -27,6 +27,8 @@ contextBridge.exposeInMainWorld('launcher', {
   getTributeOffer: () => ipcRenderer.invoke('subscription:tribute-offer'),
   checkTributeSubscription: () => ipcRenderer.invoke('subscription:tribute-check'),
   openSubscriptionPayment: () => ipcRenderer.invoke('subscription:open-payment'),
+  closeSubscriptionModal: () => ipcRenderer.invoke('subscription:close-modal'),
+  onSubscriptionModal: callback => {const listener=(_,state)=>callback(state);ipcRenderer.on('subscription:modal-state',listener);return()=>ipcRenderer.removeListener('subscription:modal-state',listener);},
   onSubscriptionPaymentClosed: callback => {const listener=()=>callback();ipcRenderer.on('subscription:payment-closed',listener);return()=>ipcRenderer.removeListener('subscription:payment-closed',listener);},
   getSubscriptionQuote: months => ipcRenderer.invoke('subscription:quote', Number(months)),
   createSubscriptionOrder: months => ipcRenderer.invoke('subscription:create-order', Number(months)),

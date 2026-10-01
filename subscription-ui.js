@@ -18,10 +18,11 @@
   const get=id=>flow.querySelector('#'+id),api=window.launcher;
   let code=null,checkout=null,stopped=false,timer=null,busy=false,expiresAt=0,generation=0;
   const stopPaymentListener=api.onSubscriptionPaymentClosed?.(()=>{if(alive()&&!busy&&checkout)get('tribute-check').click();});
+  const stopModalListener=api.onSubscriptionModal?.(state=>{if(state.closedByUser&&state.closedMode==='login'&&alive()){generation++;code=null;clearTimeout(timer);message('Вход закрыт. Можно попробовать снова.');load();}});
   const alive=()=>!stopped&&flow.isConnected&&!view.classList.contains('hidden');
   const message=(text,error=false)=>{get('subscription-message').textContent=text;get('subscription-message').classList.toggle('error',error);};
   const button=(id,visible,disabled=false)=>{get(id).classList.toggle('hidden',!visible);get(id).disabled=disabled;};
-  stopCurrent=()=>{stopped=true;clearTimeout(timer);stopPaymentListener?.();};
+  stopCurrent=()=>{stopped=true;clearTimeout(timer);stopPaymentListener?.();stopModalListener?.();};
   async function load(){
    try{const state=await api.getTelegramSubscription();if(!alive())return;
     checkout=state.checkout_url;const linked=!!state.telegram;
@@ -62,7 +63,7 @@
    try{const result=await api.confirmTelegramLink(code);code=null;await loadSubscriptionPanel();await refreshStatuses();await refreshStatuses();if(!alive())return;await load();message(result.verification_pending?'Telegram изменён. Проверка Tribute пока недоступна; прежняя Telegram-подписка больше не используется.':'Telegram подтверждён. Подписка и доступы обновлены.');}
    catch(e){await loadSubscriptionPanel();await refreshStatuses();await refreshStatuses();if(alive()){await load();message(e.message||'Не удалось привязать Telegram.',true);}}finally{busy=false;if(alive())get('tribute-confirm').disabled=false;}
   };
-  get('tribute-pay').onclick=async()=>{if(!checkout)return;try{await api.openSubscriptionPayment();message('Оплата открыта в отдельном окне EFIR. После его закрытия подписка проверится автоматически.');}catch(e){message(e.message,true);}};
+  get('tribute-pay').onclick=async()=>{if(!checkout)return;try{await api.openSubscriptionPayment();message('Оплата открыта внутри EFIR. После закрытия окна подписка проверится автоматически.');}catch(e){message(e.message,true);}};
   get('tribute-check').onclick=async()=>{if(busy)return;busy=true;get('tribute-check').disabled=true;message('Проверяем подписку…');
    try{const result=await api.checkTributeSubscription();if(!alive())return;
     await loadSubscriptionPanel();await refreshStatuses();if(!alive())return;
