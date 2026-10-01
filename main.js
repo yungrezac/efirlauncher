@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, session } = require('electron');
 const { execFile, spawn, spawnSync } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -42,6 +42,8 @@ let supabaseAccessToken = null;
 const {compareVersions,isPreview,needsChannelSwitch,createReleaseChannel}=require('./release-channel.cjs');
 const previewTag=createReleaseChannel({url:SUPABASE_URL,key:SUPABASE_KEY,getToken:()=>supabaseAccessToken});
 const licenseStatusCache = new Map();
+let accessRevision = 0, accessChanging = false, subscriptionWindows, telegramLoginAttempt = 0, telegramLoginCode = null;
+function invalidateAccess() { accessRevision++; licenseStatusCache.clear(); }
 let launcherSettings = { autoUpdate: false, autoStart: false };
 let state = {};
 let mainWindow;
@@ -132,12 +134,13 @@ async function issueLaunchTicket(appId, accessToken) {
 }
 const pendingLicenses=new Map();
 function checkLicense(appId = NNSI_APP_ID){
- const key=(supabaseAccessToken||'')+':'+appId;
+ if(accessChanging)return Promise.resolve(false);
+ const key=accessRevision+':'+(supabaseAccessToken||'')+':'+appId;
  if(pendingLicenses.has(key))return pendingLicenses.get(key);
  const task=fetchLicense(appId).finally(()=>pendingLicenses.delete(key));pendingLicenses.set(key,task);return task;
 }
 async function fetchLicense(appId) {
-  const sessionToken=supabaseAccessToken;
+  const sessionToken=supabaseAccessToken, revision=accessRevision;
   const cached = licenseStatusCache.get(appId);
   if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.value);
   if (!NNSI_LICENSE_SERVER_URL || !supabaseAccessToken) return Promise.resolve(false);
@@ -150,7 +153,8 @@ async function fetchLicense(appId) {
         if (response.statusCode !== 200) return reject(new Error(data.error || `License check: HTTP ${response.statusCode}`));
         const finish = value => {
           const result = { value: value === true, expiresAt: Date.now() + 30000 };
-          if(supabaseAccessToken===sessionToken)licenseStatusCache.set(appId, result);
+          if(supabaseAccessToken!==sessionToken||revision!==accessRevision)return resolve(false);
+          licenseStatusCache.set(appId, result);
           resolve(result.value);
         };
         return finish(data.active === true);
@@ -440,6 +444,10 @@ app.whenReady().then(() => {
   writeLog('launcher ready', { userData: app.getPath('userData'), platform: process.platform, electron: process.versions.electron });
   migrateLegacyData();
   loadState(); loadSettings(); loadCatalogCache(); mainWindow = createWindow(); createTray(mainWindow); if (process.argv.includes('--hidden')) mainWindow.hide();
+  subscriptionWindows=require('./subscription-windows.cjs').createSubscriptionWindows({BrowserWindow,session,parent:mainWindow,icon:path.join(__dirname,'assets','efir-logo.png'),onPaymentClosed:()=>{
+    if(!mainWindow.isDestroyed())mainWindow.webContents.send('subscription:payment-closed');
+  }});
+  app.on('before-quit',()=>subscriptionWindows.reset());
   if (showWhenReady) showMainWindow();
   tiktokService = require('./tiktok-service.cjs').startTikTokService(app, mainWindow, ipcMain);
   presence=require('./presence.cjs').createPresence({
@@ -450,7 +458,7 @@ app.whenReady().then(() => {
       const result=await response.json();if(!response.ok)throw Error(result.message||'Сервер сессий недоступен');return result;
     },
     onBlocked:async reason=>{
-      supabaseAccessToken=null;licenseStatusCache.clear();tiktokService.disconnect();
+      supabaseAccessToken=null;invalidateAccess();subscriptionWindows.reset();tiktokService.disconnect();
       sessionShutdown=closeManagedApps();
       if(!mainWindow.isDestroyed()){mainWindow.webContents.send('auth:blocked',reason);mainWindow.show();}
       await sessionShutdown;
@@ -486,8 +494,8 @@ app.whenReady().then(() => {
   ipcMain.handle('auth:set-session', async (event, accessToken, options={}) => {
     if(event.sender!==mainWindow.webContents||event.senderFrame!==mainWindow.webContents.mainFrame)throw Error('Unauthorized session request');
     const subject=token=>{try{return JSON.parse(Buffer.from(token.split('.')[1],'base64url')).sub;}catch{return null;}};
-    if(subject(accessToken)!==subject(supabaseAccessToken))tiktokService.resetMetrics();
-    supabaseAccessToken=typeof accessToken==='string'?accessToken:null;licenseStatusCache.clear();
+    if(subject(accessToken)!==subject(supabaseAccessToken)){tiktokService.resetMetrics();subscriptionWindows.reset();}
+    supabaseAccessToken=typeof accessToken==='string'?accessToken:null;invalidateAccess();
     if(!supabaseAccessToken){tiktokService.disconnect();await presence.clear();await presence.setToken(null);await closeManagedApps();return true;}
     if(options.initialize||options.claim)await sessionShutdown;
     return presence.setToken(supabaseAccessToken,options);
@@ -506,11 +514,45 @@ app.whenReady().then(() => {
     return handler(...args);
   };
   ipcMain.handle('subscription:telegram', subscriptionHandler(() => licenseRequest('GET', '/v1/subscription/telegram')));
-  ipcMain.handle('subscription:telegram-start', subscriptionHandler(() => licenseRequest('POST', '/v1/subscription/telegram/start', {})));
-  ipcMain.handle('subscription:telegram-status', subscriptionHandler(code => licenseRequest('POST', '/v1/subscription/telegram/status', {code})));
-  ipcMain.handle('subscription:telegram-confirm', subscriptionHandler(code => licenseRequest('POST', '/v1/subscription/telegram/confirm', {code})));
+  ipcMain.handle('subscription:telegram-start', subscriptionHandler(async () => {
+    const attempt=++telegramLoginAttempt;telegramLoginCode=null;
+    const token=supabaseAccessToken,result=await licenseRequest('POST', '/v1/subscription/telegram/start', {});
+    if(attempt!==telegramLoginAttempt)throw Error('Вход отменён.');
+    if(token!==supabaseAccessToken)throw Error('Аккаунт EFIR изменился. Начните вход заново.');
+    telegramLoginCode=result.code;await subscriptionWindows.openLogin(result.url);return result;
+  }));
+  ipcMain.handle('subscription:telegram-status', subscriptionHandler(async code => {
+    const token=supabaseAccessToken;
+    const result=await licenseRequest('POST', '/v1/subscription/telegram/status', {code});
+    if(result.telegram&&token===supabaseAccessToken&&code===telegramLoginCode){telegramLoginCode=null;subscriptionWindows.finishLogin();showMainWindow();}return result;
+  }));
+  ipcMain.handle('subscription:telegram-confirm', subscriptionHandler(async code => {
+    if(accessChanging)throw Error('Дождитесь обновления подписки.');
+    accessChanging=true;invalidateAccess();
+    try {
+      const result=await licenseRequest('POST', '/v1/subscription/telegram/confirm', {code});
+      try { Object.assign(result,await licenseRequest('POST','/v1/subscription/tribute/check',{})); }
+      catch { result.verification_pending=true; }
+      return result;
+    }
+    finally {
+      accessChanging=false;invalidateAccess();
+      // Also recheck on a timeout: the transaction may already have committed.
+      const running=statusItems().filter(item=>runningAppIds.has(item.id));
+      await Promise.all(running.map(async item=>{
+        const allowed=await checkLicense(item.id).catch(()=>false);
+        if(!allowed)await stopAppProcesses(item).catch(error=>writeLog('subscription access shutdown failed',{id:item.id,message:error.message}));
+      }));
+    }
+  }));
+  ipcMain.handle('subscription:open-payment', subscriptionHandler(async () => {
+    const token=supabaseAccessToken,state=await licenseRequest('GET','/v1/subscription/telegram');
+    if(token!==supabaseAccessToken)throw Error('Аккаунт EFIR изменился.');
+    await subscriptionWindows.openPayment(state.checkout_url);return true;
+  }));
+  ipcMain.handle('subscription:cancel-login', subscriptionHandler(() => {++telegramLoginAttempt;telegramLoginCode=null;subscriptionWindows.finishLogin();return true;}));
   ipcMain.handle('subscription:tribute-offer', subscriptionHandler(() => licenseRequest('GET', '/v1/subscription/tribute/offer')));
-  ipcMain.handle('subscription:tribute-check', subscriptionHandler(async () => {const result=await licenseRequest('POST', '/v1/subscription/tribute/check', {});licenseStatusCache.clear();return result;}));
+  ipcMain.handle('subscription:tribute-check', subscriptionHandler(async () => {const result=await licenseRequest('POST', '/v1/subscription/tribute/check', {});invalidateAccess();return result;}));
   ipcMain.handle('subscription:quote', (_e, months) => licenseRequest('GET', `/v1/subscription/quote?months=${encodeURIComponent(Number(months))}`));
   ipcMain.handle('subscription:create-order', (_e, months) => licenseRequest('POST', '/v1/subscription/orders', { months: Number(months) }));
   ipcMain.handle('subscription:verify-order', async (_e, orderId) => { const result = await licenseRequest('POST', `/v1/subscription/orders/${encodeURIComponent(orderId)}/verify`, {}); licenseStatusCache.clear(); return result; });
@@ -542,6 +584,7 @@ app.whenReady().then(() => {
   ipcMain.handle('app:install', (_e, payload) => installApplication(payload));
   ipcMain.handle('app:update', (_e, payload) => installApplication(payload, true));
   ipcMain.handle('app:launch', async (_e, payload) => {
+    const launchRevision=accessRevision;
     const item = resolveItem(payload.id, payload.item); const exe = await findExecutable(item);
     if (!exe) throw new Error('Сначала установите приложение');
     await requireSubscription(item);
@@ -553,6 +596,7 @@ app.whenReady().then(() => {
       writeLog('launch ticket issued', { id: item.id, expiresAt: ticketResponse.expires_at });
       const launchEnv = { ...process.env, ...await tiktokService.environment(), ...await walletGateway.environment(item.id), NNSI_LAUNCH_TICKET: ticketResponse.ticket, NNSI_TICKET_PUBLIC_KEY: NNSI_TICKET_PUBLIC_KEY };
       await presence.ensure();
+      if(accessChanging||launchRevision!==accessRevision)throw Error('Подписка изменилась. Повторите запуск приложения.');
       delete launchEnv.ELECTRON_RUN_AS_NODE;
       const child = spawn(exe, [], { cwd: path.dirname(exe), detached: true, stdio: 'ignore', windowsHide: false, env: launchEnv });
       trackProcess(child, path.dirname(exe), item.id);
