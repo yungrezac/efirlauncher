@@ -1,4 +1,29 @@
 html .profile-content.subscription-minimal{max-width:880px;width:100%;padding:30px;background:transparent;border:0;border-radius:0;box-shadow:none}
+.tribute-flow{display:grid;gap:14px}
+.tribute-heading{display:flex;align-items:center;gap:20px;padding:26px 24px 30px;background:radial-gradient(ellipse at 0 0,#d5fc6b14,transparent 75%);border-radius:20px}
+.tribute-mark{display:grid;place-items:center;flex-shrink:0;width:58px;height:58px;border-radius:18px;background:#d5fc6b;color:#141c0d;box-shadow:0 12px 38px #d5fc6b15}
+.tribute-mark svg{width:31px;height:31px}
+.tribute-eyebrow{color:#b9d988;font-size:10px;letter-spacing:2px;font-weight:700}
+html .tribute-heading h2{font-size:22px;letter-spacing:-.6px;margin:8px 0}
+.tribute-flow p{font-size:13px;line-height:1.6;color:#aab6a0;margin:8px 0}
+.tribute-step{display:flex;gap:18px;padding:22px 24px;border:1px solid #303b28;background:linear-gradient(135deg,#1d261a99,#11180f80);border-radius:18px}
+.tribute-step-number{display:grid;place-items:center;width:28px;height:28px;flex-shrink:0;font-size:12px;font-weight:700;color:#d5fc6b;background:#d5fc6b14;border-radius:50%}
+.tribute-step-content{flex:1;min-width:0}
+html .tribute-step h3{font-size:16px;margin:3px 0 8px}
+.tribute-step.is-locked{opacity:.5}
+.tribute-step.is-complete .tribute-step-number{background:#d5fc6b;color:#15200b}
+.tribute-flow .subscription-actions{margin-top:14px;flex-wrap:wrap;gap:10px}
+.tribute-flow button{min-height:44px;border-radius:12px}
+.tribute-flow button:focus-visible{outline:2px solid #d5fc6b;outline-offset:4px}
+.tribute-flow button:disabled{opacity:.45;cursor:default}
+.tribute-flow .hidden{display:none!important}
+.tribute-flow .tribute-account-note{font-size:12px;color:#93a17f}
+.tribute-prices{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.tribute-prices:empty{display:none}
+.tribute-prices span{padding:8px 12px;border-radius:9px;background:#d5fc6b10;color:#d3e9b5;font-size:13px}
+.tribute-flow .subscription-message{min-height:20px;margin:0 6px;color:#c7e59c;overflow-wrap:anywhere}
+.tribute-flow .subscription-message.error{color:#ffb9aa}
+@media(max-width:720px){.tribute-heading,.tribute-step{padding:18px 14px}.tribute-heading{gap:12px}html .tribute-heading h2{font-size:18px}.tribute-flow .subscription-actions{flex-direction:column;align-items:stretch}}
 html .subscription-minimal .profile-heading{margin-bottom:24px}
 html .subscription-minimal h1{font-size:28px;letter-spacing:-.8px;margin:0 0 6px}
 html .subscription-minimal .profile-page-subtitle{font-size:13px;margin:0}

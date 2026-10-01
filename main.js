@@ -39,6 +39,8 @@ const publicKeyFile = path.join(__dirname, 'assets', 'nnsi-public.pem');
 const NNSI_TICKET_PUBLIC_KEY = process.env.NNSI_TICKET_PUBLIC_KEY || (fs.existsSync(publicKeyFile) ? fs.readFileSync(publicKeyFile, 'utf8') : '');
 const NNSI_APP_ID = 'tiktimer';
 let supabaseAccessToken = null;
+const {compareVersions,isPreview,needsChannelSwitch,createReleaseChannel}=require('./release-channel.cjs');
+const previewTag=createReleaseChannel({url:SUPABASE_URL,key:SUPABASE_KEY,getToken:()=>supabaseAccessToken});
 const licenseStatusCache = new Map();
 let launcherSettings = { autoUpdate: false, autoStart: false };
 let state = {};
@@ -278,36 +280,30 @@ async function stopAppProcesses(item) {
 }
 const releaseCache=new Map(),releasePending=new Map();
 async function latest(item,refresh=false) {
- const key=item.owner+'/'+item.repo,cached=releaseCache.get(key);
+ const tag=await previewTag(item.id,refresh);
+ const repository=item.owner+'/'+item.repo;
+ const key=repository+':'+(tag||'latest'),cached=releaseCache.get(key);
  if(!refresh&&cached&&cached.until>Date.now())return cached.data;
  if(releasePending.has(key))return releasePending.get(key);
- const pending=(async()=>{try {let data;try{data=await apiJson('https://api.github.com/repos/'+key+'/releases/latest')}catch{data=await githubLatestWithoutApi(item)}releaseCache.set(key,{data,until:Date.now()+300000});return data;}finally{releasePending.delete(key)}})();
+ const pending=(async()=>{try {let data;try{data=await apiJson('https://api.github.com/repos/'+repository+'/releases/'+(tag?'tags/'+encodeURIComponent(tag):'latest'))}catch(error){if(tag)throw error;data=await githubLatestWithoutApi(item)}releaseCache.set(key,{data,until:Date.now()+300000});return data;}finally{releasePending.delete(key)}})();
  releasePending.set(key,pending);return pending;
 }
 function asset(release, name) { return (release.assets || []).find(x => x.name.toLowerCase() === name.toLowerCase()); }
 function resolveItem(id, item) { return catalogItems.find(x => x.id === id) || (item && item.id === id ? item : null); }
-function compareVersions(left, right) {
-  const parts = value => String(value || '').replace(/^[^0-9]*/, '').split(/[.-]/).map(part => Number.parseInt(part, 10) || 0);
-  const a = parts(left); const b = parts(right);
-  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
-    const difference = (a[index] || 0) - (b[index] || 0);
-    if (difference) return Math.sign(difference);
-  }
-  return 0;
-}
 async function installedPackageIsComplete(item) {
   const executable = await findExecutable(item);
   return Boolean(executable && diskFs.existsSync(path.join(path.dirname(executable), 'resources', 'app.asar')));
 }
 async function installOrUpdate(item, win, forceUpdate = false) {
+  const sessionToken = supabaseAccessToken;
   const release = await latest(item,true); const dir = appDir(item); await fsp.mkdir(dir, { recursive: true });
   const updateAsset = asset(release, 'update.zip'); const fullAsset = asset(release, 'win-unpacked.zip'); const installed = state[item.id]?.version;
   const complete = installed ? await installedPackageIsComplete(item) : false;
-  if (installed && complete && compareVersions(release.tag_name, installed) <= 0) {
+  if (installed && complete && compareVersions(release.tag_name, installed) <= 0 && !needsChannelSwitch(installed,release.tag_name)) {
     writeLog('application already current', { id: item.id, installed, offered: release.tag_name, forceUpdate });
     return { version: installed, delta: false, unchanged: true };
   }
-  const chosen = (!installed || !complete) ? fullAsset : (updateAsset || fullAsset); if (!chosen) throw new Error('В релизе нет win-unpacked.zip или update.zip');
+  const chosen = (!installed || !complete || needsChannelSwitch(installed,release.tag_name)) ? fullAsset : (updateAsset || fullAsset); if (!chosen) throw new Error('В релизе нет win-unpacked.zip или update.zip');
   const zip = path.join(app.getPath('temp'), `${item.id}-${Date.now()}.zip`);
   let downloadedAsset = chosen;
   const staging = path.join(path.dirname(dir), `.${path.basename(dir)}.installing-${process.pid}-${Date.now()}`);
@@ -319,6 +315,8 @@ async function installOrUpdate(item, win, forceUpdate = false) {
       await download(fullAsset.browser_download_url, zip, win, item.id);
       downloadedAsset = fullAsset;
     }
+    if (sessionToken !== supabaseAccessToken) throw Error('Аккаунт изменился. Повторите установку.');
+    if (release.prerelease && await previewTag(item.id,true) !== release.tag_name) throw Error('Нет доступа к тестовой версии');
     win.webContents.send('download:progress', { id: item.id, stage: 'extracting' });
     const isFullPackage = downloadedAsset.name.toLowerCase() === 'win-unpacked.zip';
     if (isFullPackage) {
@@ -358,7 +356,7 @@ async function check(item, refresh = false) {
   const savedVersion = state[item.id]?.version || null;
   const installedOnDisk = Boolean(await findExecutable(item));
   const installed = savedVersion || (installedOnDisk ? 'локально' : null);
-  return { installed, latest: release.tag_name, update: Boolean(savedVersion && compareVersions(release.tag_name, savedVersion) > 0), running: installedOnDisk && await isRunning(item) };
+  return { installed, latest: release.tag_name, update: Boolean(savedVersion && (compareVersions(release.tag_name, savedVersion) > 0 || needsChannelSwitch(savedVersion,release.tag_name))), running: installedOnDisk && await isRunning(item) };
 }
 async function findExecutable(item) {
   if (!item?.id) return null;
@@ -503,6 +501,16 @@ app.whenReady().then(() => {
     return result;
   });
   ipcMain.handle('subscription:get', () => licenseRequest('GET', '/v1/subscription'));
+  const subscriptionHandler = handler => (event,...args) => {
+    if(!mainWindow||event.sender!==mainWindow.webContents||event.senderFrame!==mainWindow.webContents.mainFrame)throw Error('Unauthorized subscription request');
+    return handler(...args);
+  };
+  ipcMain.handle('subscription:telegram', subscriptionHandler(() => licenseRequest('GET', '/v1/subscription/telegram')));
+  ipcMain.handle('subscription:telegram-start', subscriptionHandler(() => licenseRequest('POST', '/v1/subscription/telegram/start', {})));
+  ipcMain.handle('subscription:telegram-status', subscriptionHandler(code => licenseRequest('POST', '/v1/subscription/telegram/status', {code})));
+  ipcMain.handle('subscription:telegram-confirm', subscriptionHandler(code => licenseRequest('POST', '/v1/subscription/telegram/confirm', {code})));
+  ipcMain.handle('subscription:tribute-offer', subscriptionHandler(() => licenseRequest('GET', '/v1/subscription/tribute/offer')));
+  ipcMain.handle('subscription:tribute-check', subscriptionHandler(async () => {const result=await licenseRequest('POST', '/v1/subscription/tribute/check', {});licenseStatusCache.clear();return result;}));
   ipcMain.handle('subscription:quote', (_e, months) => licenseRequest('GET', `/v1/subscription/quote?months=${encodeURIComponent(Number(months))}`));
   ipcMain.handle('subscription:create-order', (_e, months) => licenseRequest('POST', '/v1/subscription/orders', { months: Number(months) }));
   ipcMain.handle('subscription:verify-order', async (_e, orderId) => { const result = await licenseRequest('POST', `/v1/subscription/orders/${encodeURIComponent(orderId)}/verify`, {}); licenseStatusCache.clear(); return result; });
@@ -537,6 +545,7 @@ app.whenReady().then(() => {
     const item = resolveItem(payload.id, payload.item); const exe = await findExecutable(item);
     if (!exe) throw new Error('Сначала установите приложение');
     await requireSubscription(item);
+    if (isPreview(state[item.id]?.version) && await previewTag(item.id,true) !== state[item.id].version) throw Error('Эта тестовая версия недоступна аккаунту. Нажмите «Обновить», чтобы установить доступную версию.');
     writeLog('launch requested', { id: item?.id, executable: exe, cwd: exe ? path.dirname(exe) : null, electronRunAsNode: process.env.ELECTRON_RUN_AS_NODE || null });
     if (item.id) {
       if (!NNSI_TICKET_PUBLIC_KEY) throw new Error('В лаунчере не настроен NNSI_TICKET_PUBLIC_KEY.');

@@ -178,14 +178,7 @@ function renderProfilePage(section = 'account') {
       finally { button.disabled = false; }
     });
     window.decorateSubscription(profileView);
-    subscriptionSelectedMonths = 1;
-    $('#subscription-plans').querySelectorAll('.subscription-plan').forEach(button => button.addEventListener('click', () => { subscriptionSelectedMonths = Number(button.dataset.months); loadSubscriptionQuote(subscriptionSelectedMonths); }));
-    $('#subscription-create-order').addEventListener('click', () => createSubscriptionOrder(subscriptionSelectedMonths));
-    $('#subscription-open-wallet').addEventListener('click', () => window.launcher.openExternal($('#subscription-open-wallet').dataset.link));
-    $('#subscription-copy-address').addEventListener('click', async () => { await navigator.clipboard.writeText($('#subscription-address').textContent); setSubscriptionMessage('Адрес скопирован.'); });
-    $('#subscription-verify').addEventListener('click', () => verifySubscriptionOrder(false));
     loadSubscriptionPanel();
-    subscriptionQuoteTimer = setInterval(() => loadSubscriptionQuote(subscriptionSelectedMonths), 20000);
   }
 }
 let subscriptionOrder = null;
@@ -271,7 +264,6 @@ async function loadSubscriptionPanel() {
     statusElement.className = `subscription-status${subscription.active ? ' active' : ''}`;
     const expires = $('#subscription-expires');
     if (expires) expires.textContent = subscription.expires_at ? `До ${new Date(subscription.expires_at).toLocaleDateString('ru-RU')}` : 'Оплата продлит доступ ко всем приложениям EFIR launcher';
-    await loadSubscriptionQuote(1);
   } catch (error) { setSubscriptionMessage(error.message || 'Не удалось загрузить подписку', true); }
 }
 async function loadSubscriptionQuote(months) {

@@ -1,23 +1,81 @@
-window.decorateSubscription = function(view) {
- const content=view.querySelector('.profile-content');content.classList.add('subscription-minimal');
- content.querySelector('.profile-large-avatar')?.remove();
- content.querySelector('.profile-page-subtitle').textContent='Все приложения EFIR в одной подписке';
- const panel=content.querySelector('.subscription-panel');panel.querySelector(':scope > p')?.remove();
- const methods=document.createElement('section');methods.className='payment-methods';methods.setAttribute('aria-label','Способ оплаты');
- methods.innerHTML=`<h3>Способ оплаты</h3><div class="payment-method-grid"><button type="button" class="payment-method selected" aria-pressed="true"><img src="./Gram_Circular_Badge.webp" alt=""><span>Gram <small>TON</small></span><span class="payment-check">✓</span></button><button type="button" class="payment-method" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20M6 15h4"/></svg><span>Карта<small>Скоро</small></span></button><button type="button" class="payment-method" disabled><img src="./assets/payments/patreon.svg" alt=""><span>Patreon<small>Скоро</small></span></button><button type="button" class="payment-method" disabled><img src="./assets/payments/boosty.png" alt=""><span>Boosty<small>Скоро</small></span></button></div>`;
- panel.querySelector('#subscription-plans').after(methods);
- const checkout=document.createElement('div');checkout.className='subscription-checkout';
- const quote=panel.querySelector('#subscription-quote'),actions=panel.querySelector(':scope > .subscription-actions');
- quote.before(checkout);checkout.append(quote,actions);
- const promo=panel.querySelector('.promo-form');if(promo){const details=document.createElement('details');details.className='subscription-promo';const summary=document.createElement('summary');summary.textContent='Есть промокод?';details.append(summary);promo.before(details);details.append(promo);promo.querySelector('label').textContent='Промокод';promo.querySelector('p').textContent='Один пробный промокод на аккаунт.';}
-};
-
-window.updateSubscriptionPresentation = function(subscription) {
- const view=document.querySelector('#profile-view');
- if(!view?.querySelector('#subscription-create-order')) return;
- const active=Boolean(subscription?.active), days=Math.max(0,Math.ceil(Number(subscription?.days_left)||0));
- const word=days%100>=11&&days%100<=14?'дней':days%10===1?'день':days%10>=2&&days%10<=4?'дня':'дней';
- view.querySelector('.profile-page-subtitle').textContent=active?'Вам осталось '+days+' '+word:'Все приложения EFIR в одной подписке';
- view.querySelector('.subscription-summary strong').textContent=active?'Подписка активна':'Все приложения EFIR launcher';
- view.querySelector('#subscription-create-order').textContent=active?'Продлить':'Создать счет';
-};
+(() => {
+ let stopCurrent=()=>{};
+ const telegramIcon='<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="m20.7 4.2-3.3 15.3c-.3 1.1-.9 1.4-1.8.9l-5-3.7-2.4 2.3c-.3.3-.5.5-1 .5l.4-5.1L17 6c.4-.4-.1-.6-.6-.3L4.8 13l-5-1.6c-1.1-.3-1.1-1.1.2-1.6L19.5 2c.9-.3 1.6.2 1.2 2.2Z" transform="translate(2 1) scale(.9)"/></svg>';
+ window.decorateSubscription=function(view){
+  stopCurrent();
+  const content=view.querySelector('.profile-content'),panel=content.querySelector('.subscription-panel');
+  content.classList.add('subscription-minimal');content.querySelector('.profile-large-avatar')?.remove();
+  content.querySelector('.profile-page-subtitle').textContent='Все приложения EFIR в одной подписке';
+  const summary=panel.querySelector('.subscription-summary'),promo=panel.querySelector('.promo-form');
+  panel.replaceChildren(summary);
+  const flow=document.createElement('section');flow.className='tribute-flow';
+  flow.innerHTML=`<div class="tribute-heading"><span class="tribute-mark">${telegramIcon}</span><div><span class="tribute-eyebrow">EFIR × TELEGRAM</span><h2>Один аккаунт. Все возможности.</h2><p>Привяжите Telegram и оформите подписку через Tribute.</p></div></div>
+   <div class="tribute-step" id="tribute-link-step"><span class="tribute-step-number">1</span><div class="tribute-step-content"><h3>Ваш Telegram</h3><p id="tribute-identity">Проверяем привязку…</p><div class="subscription-actions"><button type="button" id="tribute-login" class="primary-payment" disabled>Войти через Telegram ↗</button><button type="button" id="tribute-confirm" class="primary-payment hidden">Это мой аккаунт</button><button type="button" id="tribute-retry" class="secondary-payment hidden">Другой аккаунт</button></div></div></div>
+   <div class="tribute-step is-locked" id="tribute-pay-step"><span class="tribute-step-number">2</span><div class="tribute-step-content"><h3>Подписка EFIR Launcher</h3><p id="tribute-offer">Срок и стоимость выбираются на странице Tribute.</p><div id="tribute-prices" class="tribute-prices"></div><p class="tribute-account-note">Оплачивайте через тот же Telegram, который привязали здесь.</p><div class="subscription-actions"><button type="button" id="tribute-pay" class="primary-payment hidden">Оплатить через Tribute ↗</button><button type="button" id="tribute-check" class="secondary-payment hidden">Проверить подписку</button></div></div></div>
+   <p id="subscription-message" class="subscription-message" role="status" aria-live="polite"></p>`;
+  panel.append(flow);
+  if(promo){const details=document.createElement('details');details.className='subscription-promo';const heading=document.createElement('summary');heading.textContent='Есть промокод?';details.append(heading,promo);panel.append(details);}
+  const get=id=>flow.querySelector('#'+id),api=window.launcher;
+  let code=null,checkout=null,stopped=false,timer=null,busy=false,expiresAt=0,generation=0;
+  const alive=()=>!stopped&&flow.isConnected&&!view.classList.contains('hidden');
+  const message=(text,error=false)=>{get('subscription-message').textContent=text;get('subscription-message').classList.toggle('error',error);};
+  const button=(id,visible,disabled=false)=>{get(id).classList.toggle('hidden',!visible);get(id).disabled=disabled;};
+  stopCurrent=()=>{stopped=true;clearTimeout(timer);};
+  async function load(){
+   try{const state=await api.getTelegramSubscription();if(!alive())return;
+    checkout=state.checkout_url;const linked=!!state.telegram;
+    get('tribute-identity').textContent=linked?state.telegram.display_name+' · Telegram привязан':'Вход нужен, чтобы зачислить подписку вашему аккаунту EFIR.';
+    get('tribute-link-step').classList.toggle('is-complete',linked);get('tribute-pay-step').classList.toggle('is-locked',!linked);
+    button('tribute-login',!linked,!state.ready);button('tribute-confirm',false);button('tribute-retry',false);
+    button('tribute-pay',linked,!(state.ready&&checkout));button('tribute-check',linked,!state.ready);
+    if(!state.ready)message('Оплата через Tribute готовится к запуску. Уже активная подписка продолжает действовать.');
+    else {
+     const offer=await api.getTributeOffer();if(!alive())return;
+     const names={monthly:'месяц',quarterly:'3 месяца',halfyearly:'6 месяцев',yearly:'год',weekly:'неделя',onetime:'разовый доступ',trial:'пробный период'};
+     get('tribute-prices').replaceChildren();
+     for(const p of offer.periods||[]){if(!Number.isFinite(Number(p.price)))continue;const tag=document.createElement('span');
+      let price;try{price=new Intl.NumberFormat('ru-RU',{style:'currency',currency:offer.currency}).format(Number(p.price));}catch{price=String(p.price)+' '+String(offer.currency||'').toUpperCase();}
+      tag.textContent=price+' / '+(names[p.period]||p.period);get('tribute-prices').append(tag);}
+     get('tribute-offer').textContent='Условия Tribute. Итоговая сумма и доступные способы оплаты — на странице оформления.';
+    }
+   }catch(e){if(alive())message(e.message||'Не удалось загрузить Telegram. Попробуйте открыть раздел заново.',true);}
+  }
+  async function poll(){
+   if(!alive()||!code)return;
+   const attempt=generation;
+   if(Date.now()>expiresAt){code=null;button('tribute-login',true);message('Время входа истекло. Нажмите «Войти через Telegram» ещё раз.',true);return;}
+   try{const state=await api.getTelegramLinkStatus(code);if(!alive()||attempt!==generation)return;
+    if(state.expired||Date.now()>expiresAt){code=null;button('tribute-login',true);message('Время входа истекло. Нажмите «Войти через Telegram» ещё раз.',true);return;}
+    if(state.telegram){get('tribute-identity').textContent='Подтвердите привязку: '+state.telegram.display_name;button('tribute-confirm',true);button('tribute-retry',true);button('tribute-login',false);message('Убедитесь, что это ваш Telegram-аккаунт.');return;}
+   }catch(e){if(alive()&&attempt===generation)message(e.message||'Ожидаем соединение…',true);}
+   if(alive()&&attempt===generation)timer=setTimeout(poll,2500);
+  }
+  async function start(){if(busy)return;busy=true;generation++;code=null;clearTimeout(timer);button('tribute-login',true,true);button('tribute-confirm',false);button('tribute-retry',false);
+   try{const result=await api.startTelegramLink();if(!alive())return;code=result.code;expiresAt=Date.now()+result.expires_in*1000;
+    await api.openExternal(result.url);if(!alive())return;
+    message('В @efirpaybot нажмите «Запустить», затем вернитесь сюда и подтвердите аккаунт.');timer=setTimeout(poll,1000);
+   }catch(e){if(alive())message(e.message||'Не удалось открыть Telegram.',true);}finally{busy=false;if(alive())get('tribute-login').disabled=false;}
+  }
+  get('tribute-login').onclick=start;get('tribute-retry').onclick=start;
+  get('tribute-confirm').onclick=async()=>{if(busy||!code)return;busy=true;get('tribute-confirm').disabled=true;
+   try{await api.confirmTelegramLink(code);if(!alive())return;code=null;message('Telegram привязан. Теперь можно оплатить подписку.');await load();if(alive()){await loadSubscriptionPanel();await refreshStatuses();}}
+   catch(e){if(alive())message(e.message||'Не удалось привязать Telegram.',true);}finally{busy=false;if(alive())get('tribute-confirm').disabled=false;}
+  };
+  get('tribute-pay').onclick=async()=>{if(!checkout)return;try{await api.openExternal(checkout);message('После оплаты вернитесь сюда и нажмите «Проверить подписку».');}catch(e){message(e.message,true);}};
+  get('tribute-check').onclick=async()=>{if(busy)return;busy=true;get('tribute-check').disabled=true;message('Проверяем подписку…');
+   try{const result=await api.checkTributeSubscription();if(!alive())return;
+    await loadSubscriptionPanel();await refreshStatuses();if(!alive())return;
+    message(result.verification_pending?'Tribute пока не ответил. Статус обновится после подтверждения оплаты.':result.subscription.active?'Подписка активна. Приложения доступны.':'Оплата пока не подтверждена. Проверьте, что оплатили с привязанного Telegram.');
+   }catch(e){if(alive())message(e.message||'Не удалось проверить подписку.',true);}finally{busy=false;if(alive())get('tribute-check').disabled=false;}
+  };
+  load();
+ };
+ window.updateSubscriptionPresentation=function(subscription){
+  const view=document.querySelector('#profile-view');if(!view?.querySelector('.tribute-flow'))return;
+  const active=!!subscription?.active,days=Math.max(0,Math.ceil(Number(subscription?.days_left)||0));
+  const word=days%100>=11&&days%100<=14?'дней':days%10===1?'день':days%10>=2&&days%10<=4?'дня':'дней';
+  view.querySelector('.profile-page-subtitle').textContent=active?'Вам осталось '+days+' '+word:'Все приложения EFIR в одной подписке';
+  view.querySelector('.subscription-summary strong').textContent=active?'Подписка активна':'Все приложения EFIR launcher';
+  view.querySelector('#tribute-pay').textContent=active?'Управлять подпиской в Tribute ↗':'Оплатить через Tribute ↗';
+ };
+})();
