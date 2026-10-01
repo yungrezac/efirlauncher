@@ -17,7 +17,7 @@ function telegramLoginLink(value, source) {
   } catch { return false; }
 }
 function createSubscriptionWindows({ WebContentsView, session, shell, parent, onState = () => {}, onPaymentClosed = () => {} }) {
-  let partition, mode = null, visible = null, error = '', closing = false, cancelPending;
+  let partition, mode = null, visible = null, error = '', closing = false, cancelPending, loginMonitor, loginPhase='';
   const views = new Set(), stack = [];
   function geometry() {
     const [w,h] = parent.getContentSize(), width = Math.min(580, Math.max(280,w-40)), height = Math.min(780,Math.max(240,h-48));
@@ -27,19 +27,46 @@ function createSubscriptionWindows({ WebContentsView, session, shell, parent, on
     if(parent.isDestroyed())return;
     const bounds=geometry();
     if(visible&&!visible.webContents.isDestroyed())visible.setBounds({x:bounds.x+1,y:bounds.y+60,width:bounds.width-2,height:Math.max(1,bounds.height-106)});
-    onState({open:!!mode,mode,title:mode==='payment'?'Подписка Tribute':'Вход в Telegram',error,loading:!!mode&&!visible,
+    onState({open:!!mode,mode,title:mode==='payment'?'Подписка Tribute':'Вход в Telegram',error,loading:!!mode&&!visible,loadingText:mode==='login'&&loginPhase==='verifying'?'Подтверждаем вход…':'Загружаем…',
       host:visible&&!visible.webContents.isDestroyed()?safeHost(visible.webContents.getURL()):'',bounds,scale:parent.webContents.getZoomFactor(),...extra});
   }
   function safeHost(url) { try{return new URL(url).hostname;}catch{return '';} }
   function detach() { if(visible&&!parent.isDestroyed())parent.contentView.removeChildView(visible);visible=null; }
   function display(view) { detach();visible=view;parent.contentView.addChildView(view);update();view.webContents.focus(); }
-  function closeAll(notify=false) {
+  function closeAll(notify=false,result={}) {
+    clearTimeout(loginMonitor);loginMonitor=null;loginPhase='';
     const closedMode=mode,wasPayment=mode==='payment';mode=null;closing=true;cancelPending?.();cancelPending=null;detach();
     for(const view of views)if(!view.webContents.isDestroyed())view.webContents.close({waitForBeforeUnload:false});
-    views.clear();stack.length=0;error='';closing=false;update({closedByUser:notify,closedMode});
+    views.clear();stack.length=0;error='';closing=false;update({closedByUser:notify,closedMode,...result});
     if(notify&&wasPayment)onPaymentClosed();
   }
   function reset() { closeAll();partition=undefined; }
+  function watchLogin(root) {
+    const wc=root.webContents,deadline=Date.now()+600000;
+    let noPopupSince=0,checkingSince=0;
+    const current=()=>mode==='login'&&views.has(root)&&!wc.isDestroyed();
+    const fail=text=>closeAll(false,{loginError:text});
+    async function check(){
+      if(!current())return;
+      try{
+        if(new URL(wc.getURL()).origin!==LOGIN_ORIGIN)throw Error('origin');
+        // Only read our own coordinator. Identity is still checked via the authenticated API.
+        const result=await wc.executeJavaScript(`(()=>{const s=document.getElementById('status');return {phase:s?.dataset.phase||(s?.classList.contains('error')?'error':''),text:s?.textContent?.slice(0,500)};})()`);
+        if(!current())return;
+        if(result.phase==='error'){fail(result.text||'Не удалось завершить вход. Повторите попытку.');return;}
+        if(result.phase==='verified'){closeAll(false,{loginCompleted:true});return;}
+        loginPhase=result.phase;update();
+        const now=Date.now();
+        if(result.phase==='verifying')checkingSince ||= now;
+        if(!visible)noPopupSince ||= now;else noPopupSince=0;
+        if(now>deadline||(checkingSince&&now-checkingSince>20000)||(noPopupSince&&now-noPopupSince>20000)){
+          fail('Не удалось получить подтверждение Telegram. Начните вход заново.');return;
+        }
+      }catch{if(current()){fail('Не удалось завершить вход. Проверьте соединение и повторите попытку.');return;}}
+      if(current())loginMonitor=setTimeout(check,500);
+    }
+    loginMonitor=setTimeout(check,250);
+  }
   function preferences() {
     if(!partition){partition='efir-subscription-'+crypto.randomUUID();const s=session.fromPartition(partition);
       s.setPermissionRequestHandler((_wc,_permission,callback)=>callback(false));s.setPermissionCheckHandler(()=>false);
@@ -96,6 +123,7 @@ function createSubscriptionWindows({ WebContentsView, session, shell, parent, on
         if(new URL(wc.getURL()).origin!==LOGIN_ORIGIN)throw Error('Некорректная страница входа.');
         await wc.executeJavaScript(`new Promise((resolve,reject)=>{const end=Date.now()+10000;const run=()=>{const b=document.getElementById('login');if(b&&!b.disabled){b.click();resolve();}else if(Date.now()>end)reject(Error('Telegram недоступен. Повторите вход.'));else setTimeout(run,100);};run();})`,true);
         if(!visible)throw Error('Не удалось открыть Telegram. Повторите вход.');
+        watchLogin(root);
       })()]);
     } catch(e) { if(views.has(root)){closeAll();}throw e; }
     finally { cancelPending=null; }

@@ -18,7 +18,14 @@
   const get=id=>flow.querySelector('#'+id),api=window.launcher;
   let code=null,checkout=null,stopped=false,timer=null,busy=false,expiresAt=0,generation=0;
   const stopPaymentListener=api.onSubscriptionPaymentClosed?.(()=>{if(alive()&&!busy&&checkout)get('tribute-check').click();});
-  const stopModalListener=api.onSubscriptionModal?.(state=>{if(state.closedByUser&&state.closedMode==='login'&&alive()){generation++;code=null;clearTimeout(timer);message('Вход закрыт. Можно попробовать снова.');load();}});
+  const stopModalListener=api.onSubscriptionModal?.(state=>{
+   if(!alive())return;
+   if(state.loginCompleted){clearTimeout(timer);timer=setTimeout(poll,0);}
+   if(state.loginError||(state.closedByUser&&state.closedMode==='login')){
+    generation++;code=null;clearTimeout(timer);
+    load().then(()=>{if(alive())message(state.loginError||'Вход закрыт. Можно попробовать снова.',!!state.loginError);});
+   }
+  });
   const alive=()=>!stopped&&flow.isConnected&&!view.classList.contains('hidden');
   const message=(text,error=false)=>{get('subscription-message').textContent=text;get('subscription-message').classList.toggle('error',error);};
   const button=(id,visible,disabled=false)=>{get(id).classList.toggle('hidden',!visible);get(id).disabled=disabled;};
@@ -45,9 +52,9 @@
   async function poll(){
    if(!alive()||!code)return;
    const attempt=generation;
-   if(Date.now()>expiresAt){code=null;button('tribute-login',true);message('Время входа истекло. Нажмите «Войти через Telegram» ещё раз.',true);return;}
+   if(Date.now()>expiresAt){code=null;await api.cancelTelegramLink();button('tribute-login',true);message('Время входа истекло. Нажмите «Войти через Telegram» ещё раз.',true);return;}
    try{const state=await api.getTelegramLinkStatus(code);if(!alive()||attempt!==generation)return;
-    if(state.expired||Date.now()>expiresAt){code=null;button('tribute-login',true);message('Время входа истекло. Нажмите «Войти через Telegram» ещё раз.',true);return;}
+    if(state.expired||Date.now()>expiresAt){code=null;await api.cancelTelegramLink();button('tribute-login',true);message('Время входа истекло. Нажмите «Войти через Telegram» ещё раз.',true);return;}
     if(state.telegram){get('tribute-identity').textContent='Подтвердите привязку: '+state.telegram.display_name;button('tribute-confirm',true);button('tribute-retry',true);button('tribute-login',false);message('Убедитесь, что это ваш Telegram-аккаунт.');return;}
    }catch(e){if(alive()&&attempt===generation)message(e.message||'Ожидаем соединение…',true);}
    if(alive()&&attempt===generation)timer=setTimeout(poll,2500);

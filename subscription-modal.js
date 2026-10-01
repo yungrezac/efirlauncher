@@ -16,7 +16,7 @@
     Object.assign(card.style,{left:b.x/scale+'px',top:b.y/scale+'px',width:b.width+'px',height:b.height+'px',transform:`scale(${1/scale})`,transformOrigin:'top left'});
     dialog.querySelector('.subscription-modal-heading').textContent=state.title;
     dialog.querySelector('.subscription-modal-footer').textContent=state.error||state.host||'Защищённое соединение';
-    dialog.querySelector('.subscription-modal-loading').textContent=state.error||'Загружаем…';
+    dialog.querySelector('.subscription-modal-loading').textContent=state.error||state.loadingText||'Загружаем…';
     dialog.querySelector('.subscription-modal-loading').style.visibility=state.loading?'visible':'hidden';
     if(!dialog.open){restoreFocus=document.activeElement;dialog.showModal();}
   });
