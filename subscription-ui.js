@@ -1,7 +1,7 @@
 (() => {
  let stopCurrent=()=>{};
  const telegramIcon='<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="m20.7 4.2-3.3 15.3c-.3 1.1-.9 1.4-1.8.9l-5-3.7-2.4 2.3c-.3.3-.5.5-1 .5l.4-5.1L17 6c.4-.4-.1-.6-.6-.3L4.8 13l-5-1.6c-1.1-.3-1.1-1.1.2-1.6L19.5 2c.9-.3 1.6.2 1.2 2.2Z" transform="translate(2 1) scale(.9)"/></svg>';
- window.decorateSubscription=function(view){
+ window.decorateSubscription=function(view,refreshSubscription){
   stopCurrent();
   const content=view.querySelector('.profile-content'),panel=content.querySelector('.subscription-panel');
   content.classList.add('subscription-minimal');content.querySelector('.profile-large-avatar')?.remove();
@@ -82,13 +82,15 @@
   async function completeLogin(){if(busy||!code)return;busy=true;clearTimeout(timer);
    button('tribute-login',false);button('tribute-cancel',false);button('tribute-change',false);button('tribute-pay',false);button('tribute-check',false);
    message('Обновляем Telegram и подписку…');
-   try{const result=await api.confirmTelegramLink(code);code=null;await loadSubscriptionPanel();await refreshStatuses();await refreshStatuses();if(!alive())return;await load();message(result.verification_pending?'Telegram подключён. Проверка подписки Tribute пока недоступна.':'Telegram подключён. Подписка и доступы обновлены.');}
-   catch(e){code=null;await loadSubscriptionPanel();await refreshStatuses();await refreshStatuses();if(alive()){await load();message(e.message||'Не удалось привязать Telegram.',true);}}finally{busy=false;}
+   let outcome='',failed=false;
+   try{const result=await api.confirmTelegramLink(code);await refreshSubscription();outcome=result.verification_pending?'Telegram подключён. Проверка подписки Tribute пока недоступна.':'Telegram подключён. Подписка и доступы обновлены.';}
+   catch(e){outcome=e.message||'Не удалось привязать Telegram.';failed=true;}
+   finally{code=null;if(alive()){await load();message(outcome,failed);}busy=false;}
   }
   get('tribute-pay').onclick=async()=>{if(!checkout)return;try{await api.openSubscriptionPayment();message('Оплата открыта внутри EFIR. После закрытия окна подписка проверится автоматически.');}catch(e){message(e.message,true);}};
   get('tribute-check').onclick=async()=>{if(busy)return;busy=true;get('tribute-check').disabled=true;message('Проверяем подписку…');
    try{const result=await api.checkTributeSubscription();if(!alive())return;
-    await loadSubscriptionPanel();await refreshStatuses();if(!alive())return;
+    await refreshSubscription();if(!alive())return;
     message(result.verification_pending?'Tribute пока не ответил. Статус обновится после подтверждения оплаты.':result.subscription.active?'Подписка активна. Приложения доступны.':'Оплата пока не подтверждена. Проверьте, что оплатили с привязанного Telegram.');
    }catch(e){if(alive())message(e.message||'Не удалось проверить подписку.',true);}finally{busy=false;if(alive())get('tribute-check').disabled=false;}
   };

@@ -177,7 +177,12 @@ function renderProfilePage(section = 'account') {
       } catch (error) { result.textContent = error.message || 'Не удалось применить промокод.'; }
       finally { button.disabled = false; }
     });
-    window.decorateSubscription(profileView);
+    window.decorateSubscription(profileView, async () => {
+      await loadSubscriptionPanel();
+      // Drain any earlier status request, then fetch the reconciled access state.
+      await refreshStatuses();
+      await refreshStatuses();
+    });
     loadSubscriptionPanel();
   }
 }
