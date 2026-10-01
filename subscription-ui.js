@@ -10,7 +10,7 @@
   panel.replaceChildren(summary);
   const flow=document.createElement('section');flow.className='tribute-flow';
   flow.innerHTML=`<div class="tribute-heading"><span class="tribute-mark">${telegramIcon}</span><div><span class="tribute-eyebrow">EFIR × TELEGRAM</span><h2>Один аккаунт. Все возможности.</h2><p>Привяжите Telegram и оформите подписку через Tribute.</p></div></div>
-   <div class="tribute-step" id="tribute-link-step"><span class="tribute-step-number">1</span><div class="tribute-step-content"><h3>Ваш Telegram</h3><p id="tribute-identity">Проверяем привязку…</p><div class="subscription-actions"><button type="button" id="tribute-login" class="primary-payment" disabled>Войти через Telegram ↗</button><button type="button" id="tribute-change" class="secondary-payment hidden">Сменить Telegram</button><button type="button" id="tribute-cancel" class="secondary-payment hidden">Отмена</button><button type="button" id="tribute-confirm" class="primary-payment hidden">Это мой аккаунт</button><button type="button" id="tribute-retry" class="secondary-payment hidden">Другой аккаунт</button></div></div></div>
+   <div class="tribute-step" id="tribute-link-step"><span class="tribute-step-number">1</span><div class="tribute-step-content"><h3>Ваш Telegram</h3><div id="tribute-identity">Проверяем привязку…</div><div class="subscription-actions"><button type="button" id="tribute-login" class="primary-payment" disabled>Войти через Telegram ↗</button><button type="button" id="tribute-change" class="secondary-payment hidden">Сменить Telegram</button><button type="button" id="tribute-cancel" class="secondary-payment hidden">Отмена</button></div></div></div>
    <div class="tribute-step is-locked" id="tribute-pay-step"><span class="tribute-step-number">2</span><div class="tribute-step-content"><h3>Подписка EFIR Launcher</h3><p id="tribute-offer">Срок и стоимость выбираются на странице Tribute.</p><div id="tribute-prices" class="tribute-prices"></div><p class="tribute-account-note">Оплачивайте через тот же Telegram, который привязали здесь.</p><div class="subscription-actions"><button type="button" id="tribute-pay" class="primary-payment hidden">Оплатить через Tribute ↗</button><button type="button" id="tribute-check" class="secondary-payment hidden">Проверить подписку</button></div></div></div>
    <p id="subscription-message" class="subscription-message" role="status" aria-live="polite"></p>`;
   panel.append(flow);
@@ -29,13 +29,26 @@
   const alive=()=>!stopped&&flow.isConnected&&!view.classList.contains('hidden');
   const message=(text,error=false)=>{get('subscription-message').textContent=text;get('subscription-message').classList.toggle('error',error);};
   const button=(id,visible,disabled=false)=>{get(id).classList.toggle('hidden',!visible);get(id).disabled=disabled;};
+  function renderIdentity(telegram){
+   const target=get('tribute-identity');target.replaceChildren();
+   if(!telegram){target.textContent='Вход нужен, чтобы зачислить подписку вашему аккаунту EFIR.';return;}
+   const username=telegram.username||(telegram.display_name?.startsWith('@')?telegram.display_name.slice(1):'');
+   const name=telegram.name||(!telegram.display_name?.startsWith('@')?telegram.display_name:'')||'Telegram';
+   const card=document.createElement('div');card.className='tribute-user';
+   const avatar=document.createElement('span');avatar.className='tribute-user-avatar';avatar.textContent=Array.from(name)[0]?.toUpperCase()||'T';
+   try{const url=new URL(telegram.photo_url);if(url.protocol==='https:'&&!url.username&&!url.password){const img=document.createElement('img');img.alt='';img.referrerPolicy='no-referrer';img.src=url.href;img.onerror=()=>img.remove();avatar.append(img);}}catch{}
+   const info=document.createElement('div');info.className='tribute-user-info';
+   const title=document.createElement('strong');title.textContent=name;
+   const handle=document.createElement('span');handle.textContent=username?'@'+username:'Без username';
+   info.append(title,handle);card.append(avatar,info);target.append(card);
+  }
   stopCurrent=()=>{stopped=true;clearTimeout(timer);stopPaymentListener?.();stopModalListener?.();};
   async function load(){
    try{const state=await api.getTelegramSubscription();if(!alive())return;
     checkout=state.checkout_url;const linked=!!state.telegram;
-    get('tribute-identity').textContent=linked?state.telegram.display_name+' · Telegram привязан':'Вход нужен, чтобы зачислить подписку вашему аккаунту EFIR.';
+    renderIdentity(state.telegram);
     get('tribute-link-step').classList.toggle('is-complete',linked);get('tribute-pay-step').classList.toggle('is-locked',!linked);
-    button('tribute-login',!linked,!state.ready);button('tribute-change',linked,!state.ready);button('tribute-cancel',false);button('tribute-confirm',false);button('tribute-retry',false);
+    button('tribute-login',!linked,!state.ready);button('tribute-change',linked,!state.ready);button('tribute-cancel',false);
     button('tribute-pay',linked,!(state.ready&&checkout));button('tribute-check',linked,!state.ready);
     if(!state.ready)message('Оплата через Tribute готовится к запуску. Уже активная подписка продолжает действовать.');
     else {
@@ -50,26 +63,28 @@
    }catch(e){if(alive())message(e.message||'Не удалось загрузить Telegram. Попробуйте открыть раздел заново.',true);}
   }
   async function poll(){
-   if(!alive()||!code)return;
+   if(!alive()||!code||busy)return;
    const attempt=generation;
    if(Date.now()>expiresAt){code=null;await api.cancelTelegramLink();button('tribute-login',true);message('Время входа истекло. Нажмите «Войти через Telegram» ещё раз.',true);return;}
    try{const state=await api.getTelegramLinkStatus(code);if(!alive()||attempt!==generation)return;
     if(state.expired||Date.now()>expiresAt){code=null;await api.cancelTelegramLink();button('tribute-login',true);message('Время входа истекло. Нажмите «Войти через Telegram» ещё раз.',true);return;}
-    if(state.telegram){get('tribute-identity').textContent='Подтвердите привязку: '+state.telegram.display_name;button('tribute-confirm',true);button('tribute-retry',true);button('tribute-login',false);message('Убедитесь, что это ваш Telegram-аккаунт.');return;}
+    if(state.telegram){await completeLogin();return;}
    }catch(e){if(alive()&&attempt===generation)message(e.message||'Ожидаем соединение…',true);}
    if(alive()&&attempt===generation)timer=setTimeout(poll,2500);
   }
-  async function start(){if(busy)return;busy=true;generation++;code=null;clearTimeout(timer);button('tribute-login',true,true);button('tribute-change',false);button('tribute-cancel',true);button('tribute-confirm',false);button('tribute-retry',false);
-   try{const result=await api.startTelegramLink();if(!alive())return;code=result.code;expiresAt=Date.now()+result.expires_in*1000;
-    message('Войдите в открывшемся окне Telegram, затем подтвердите аккаунт здесь. После смены подписка и доступы обновятся; приложения без доступа закроются.');timer=setTimeout(poll,1000);
+  async function start(){if(busy)return;busy=true;const attempt=++generation;code=null;clearTimeout(timer);button('tribute-login',true,true);button('tribute-change',false);button('tribute-cancel',true);
+   try{const result=await api.startTelegramLink();if(!alive()||attempt!==generation)return;code=result.code;expiresAt=Date.now()+result.expires_in*1000;
+    message('Завершите вход в Telegram. Аккаунт привяжется автоматически, подписка и доступы обновятся.');timer=setTimeout(poll,1000);
    }catch(e){if(alive())message(e.message||'Не удалось открыть Telegram.',true);}finally{busy=false;if(alive())get('tribute-login').disabled=false;}
   }
-  get('tribute-login').onclick=start;get('tribute-retry').onclick=start;get('tribute-change').onclick=start;
+  get('tribute-login').onclick=start;get('tribute-change').onclick=start;
   get('tribute-cancel').onclick=async()=>{if(busy)return;generation++;code=null;clearTimeout(timer);await api.cancelTelegramLink();if(alive()){message('Смена аккаунта отменена.');await load();}};
-  get('tribute-confirm').onclick=async()=>{if(busy||!code)return;busy=true;get('tribute-confirm').disabled=true;
-   try{const result=await api.confirmTelegramLink(code);code=null;await loadSubscriptionPanel();await refreshStatuses();await refreshStatuses();if(!alive())return;await load();message(result.verification_pending?'Telegram изменён. Проверка Tribute пока недоступна; прежняя Telegram-подписка больше не используется.':'Telegram подтверждён. Подписка и доступы обновлены.');}
-   catch(e){await loadSubscriptionPanel();await refreshStatuses();await refreshStatuses();if(alive()){await load();message(e.message||'Не удалось привязать Telegram.',true);}}finally{busy=false;if(alive())get('tribute-confirm').disabled=false;}
-  };
+  async function completeLogin(){if(busy||!code)return;busy=true;clearTimeout(timer);
+   button('tribute-login',false);button('tribute-cancel',false);button('tribute-change',false);button('tribute-pay',false);button('tribute-check',false);
+   message('Обновляем Telegram и подписку…');
+   try{const result=await api.confirmTelegramLink(code);code=null;await loadSubscriptionPanel();await refreshStatuses();await refreshStatuses();if(!alive())return;await load();message(result.verification_pending?'Telegram подключён. Проверка подписки Tribute пока недоступна.':'Telegram подключён. Подписка и доступы обновлены.');}
+   catch(e){code=null;await loadSubscriptionPanel();await refreshStatuses();await refreshStatuses();if(alive()){await load();message(e.message||'Не удалось привязать Telegram.',true);}}finally{busy=false;}
+  }
   get('tribute-pay').onclick=async()=>{if(!checkout)return;try{await api.openSubscriptionPayment();message('Оплата открыта внутри EFIR. После закрытия окна подписка проверится автоматически.');}catch(e){message(e.message,true);}};
   get('tribute-check').onclick=async()=>{if(busy)return;busy=true;get('tribute-check').disabled=true;message('Проверяем подписку…');
    try{const result=await api.checkTributeSubscription();if(!alive())return;

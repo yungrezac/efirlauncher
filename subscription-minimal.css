@@ -9,6 +9,12 @@ html .tribute-heading h2{font-size:22px;letter-spacing:-.6px;margin:8px 0}
 .tribute-step{display:flex;gap:18px;padding:22px 24px;border:1px solid #303b28;background:linear-gradient(135deg,#1d261a99,#11180f80);border-radius:18px}
 .tribute-step-number{display:grid;place-items:center;width:28px;height:28px;flex-shrink:0;font-size:12px;font-weight:700;color:#d5fc6b;background:#d5fc6b14;border-radius:50%}
 .tribute-step-content{flex:1;min-width:0}
+.tribute-user{display:flex;align-items:center;gap:14px;margin:14px 0 18px}
+.tribute-user-avatar{position:relative;display:grid;place-items:center;flex-shrink:0;width:58px;height:58px;overflow:hidden;border-radius:50%;background:#d5fc6b22;color:#d5fc6b;font-size:23px;font-weight:700}
+.tribute-user-avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.tribute-user-info{display:grid;gap:5px;min-width:0;overflow-wrap:anywhere}
+.tribute-user-info strong{font-size:17px;color:#edf4e8;font-weight:650}
+.tribute-user-info span,#tribute-identity{font-size:13px;line-height:1.5;color:#aab6a0}
 html .tribute-step h3{font-size:16px;margin:3px 0 8px}
 .tribute-step.is-locked{opacity:.5}
 .tribute-step.is-complete .tribute-step-number{background:#d5fc6b;color:#15200b}
