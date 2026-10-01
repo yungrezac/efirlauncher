@@ -14,7 +14,7 @@
    <div class="tribute-step is-locked" id="tribute-pay-step"><span class="tribute-step-number">2</span><div class="tribute-step-content"><h3>Подписка EFIR Launcher</h3><p id="tribute-offer">Срок и стоимость выбираются на странице Tribute.</p><div id="tribute-prices" class="tribute-prices"></div><p class="tribute-account-note">Оплачивайте через тот же Telegram, который привязали здесь.</p><div class="subscription-actions"><button type="button" id="tribute-pay" class="primary-payment hidden">Оплатить через Tribute ↗</button><button type="button" id="tribute-check" class="secondary-payment hidden">Проверить подписку</button></div></div></div>
    <p id="subscription-message" class="subscription-message" role="status" aria-live="polite"></p>`;
   panel.append(flow);
-  if(promo){const details=document.createElement('details');details.className='subscription-promo';const heading=document.createElement('summary');heading.textContent='Есть промокод?';details.append(heading,promo);panel.append(details);}
+  if(promo){const details=document.createElement('details');details.className='subscription-promo';const heading=document.createElement('summary');heading.textContent='Есть код автора или промокод?';details.append(heading,promo);panel.append(details);}
   const get=id=>flow.querySelector('#'+id),api=window.launcher;
   let code=null,checkout=null,stopped=false,timer=null,busy=false,expiresAt=0,generation=0;
   const stopPaymentListener=api.onSubscriptionPaymentClosed?.(()=>{if(alive()&&!busy&&checkout)get('tribute-check').click();});

@@ -162,20 +162,29 @@ function renderProfilePage(section = 'account') {
   if (section === 'subscription') {
     const promoForm = document.createElement('form');
     promoForm.className = 'promo-form';
-    promoForm.innerHTML = '<label for="promo-code">Промокод на пробный период</label><p>Один промокод на аккаунт за всё время. Индивидуальные ограничения на приложения сохраняются.</p><div class="subscription-actions"><input id="promo-code" maxlength="64" autocomplete="off" placeholder="Введите промокод" required><button type="submit" class="primary-payment">Применить</button></div><p class="promo-result" role="status" aria-live="polite"></p>';
+    promoForm.innerHTML = '<label for="promo-code">Код автора или промокод</label><p>Код автора — часть ссылки после / — открывает TIMER и IMMWIGET в каталоге. Для запуска нужна подписка. Пробный промокод добавляет дни доступа и применяется один раз на аккаунт.</p><div class="subscription-actions"><input id="promo-code" maxlength="64" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Введите код автора или промокод" required><button type="submit" class="primary-payment">Применить</button></div><p class="promo-result" role="status" aria-live="polite"></p>';
     profileView.querySelector('.subscription-panel').appendChild(promoForm);
     promoForm.addEventListener('submit', async event => {
       event.preventDefault();
       const button = promoForm.querySelector('button');
       const result = promoForm.querySelector('.promo-result');
+      if (button.disabled) return;
+      const accountRevision = catalogAccountRevision;
       button.disabled = true;
-      result.textContent = 'Проверяем промокод…';
+      result.textContent = 'Проверяем код…';
       try {
-        const redeemed = await window.launcher.redeemPromo(promoForm.querySelector('input').value);
-        result.textContent = 'Пробный доступ активирован на ' + redeemed.days + ' дн., до ' + new Date(redeemed.expires_at).toLocaleDateString('ru-RU') + '.';
+        const redeemed = await window.launcher.redeemCode(promoForm.querySelector('input').value);
+        if (accountRevision !== catalogAccountRevision || !promoForm.isConnected) return;
+        if (!redeemed.ok) throw Error(redeemed.error || 'Не удалось применить код.');
+        result.textContent = redeemed.kind === 'referral'
+          ? 'Код автора ' + redeemed.code + ' закреплён. TIMER и IMMWIGET доступны в каталоге. Для запуска нужна подписка.'
+          : 'Пробный доступ активирован на ' + redeemed.days + ' дн., до ' + new Date(redeemed.expires_at).toLocaleDateString('ru-RU') + '.';
         promoForm.querySelector('input').value = '';
-        await Promise.all([loadSubscriptionPanel(), refreshStatuses()]);
-      } catch (error) { result.textContent = error.message || 'Не удалось применить промокод.'; }
+        try {
+          if (redeemed.kind === 'referral') await reloadStoreCatalog();
+          else await Promise.all([loadSubscriptionPanel(), refreshStatuses()]);
+        } catch { if (accountRevision === catalogAccountRevision) result.textContent += ' Не удалось обновить данные: нажмите обновление, когда появится интернет.'; }
+      } catch (error) { if (accountRevision === catalogAccountRevision && promoForm.isConnected) result.textContent = error.message || 'Не удалось применить код.'; }
       finally { button.disabled = false; }
     });
     window.decorateSubscription(profileView, async () => {

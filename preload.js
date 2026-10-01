@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('launcher', {
   setAutoUpdate: enabled => ipcRenderer.invoke('settings:auto-update', Boolean(enabled)),
   setAutoStart: enabled => ipcRenderer.invoke('settings:auto-start', Boolean(enabled)),
   redeemPromo: code => ipcRenderer.invoke('promo:redeem', code),
+  redeemCode: code => ipcRenderer.invoke('code:redeem', code),
   getPendingReferral: () => ipcRenderer.invoke('referral:pending'),
   getReferralStatus: () => ipcRenderer.invoke('referral:status'),
   claimReferral: code => ipcRenderer.invoke('referral:claim', code),

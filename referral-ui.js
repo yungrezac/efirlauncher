@@ -93,5 +93,5 @@
   client.auth.getSession().then(({ data }) => changed(data.session)).catch(() => {});
   client.auth.onAuthStateChange((_event, session) => changed(session));
   api.getPendingReferral().then(value => { pending = value; updateHint(); }).catch(() => {});
-  api.onReferralPending(value => { pending = value; updateHint(); if (account) open(); });
+  api.onReferralPending(value => { pending = value; updateHint(); if (pending && account) open(); });
 })();

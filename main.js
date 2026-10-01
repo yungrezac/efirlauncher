@@ -533,6 +533,25 @@ app.whenReady().then(() => {
     return handler(...args);
   };
   ipcMain.handle('referral:pending', referralHandler(() => pendingReferral ? { code: pendingReferral.code } : null));
+  ipcMain.handle('code:redeem', referralHandler(async value => {
+    try {
+      const code = typeof value === 'string' ? value.trim().toLowerCase() : '';
+      if (!/^[a-z0-9_-]{3,64}$/.test(code)) throw Error('Введите код автора или промокод.');
+      const token = supabaseAccessToken;
+      if (!token) throw Error('Сначала войдите в аккаунт EFIR.');
+      const machine_id = await machineId();
+      if (token !== supabaseAccessToken) throw Error('Аккаунт изменился. Повторите ввод кода.');
+      const result = await licenseRequest('POST', '/v1/codes/redeem', { code, machine_id });
+      if (token !== supabaseAccessToken) throw Error('Аккаунт изменился. Проверьте код в своём профиле.');
+      if (result.kind === 'referral' && pendingReferral?.code === result.code) {
+        pendingReferral = null;
+        try { fs.unlinkSync(pendingReferralFile); } catch { /* Already absent. */ }
+        mainWindow.webContents.send('referral:pending', null);
+      }
+      invalidateAccess();
+      return { ...result, ok: true };
+    } catch (error) { return { ok: false, error: error.message || 'Не удалось применить код.' }; }
+  }));
   ipcMain.handle('referral:status', referralHandler(() => licenseRequest('GET', '/v1/referrals/status')));
   ipcMain.handle('referral:claim', referralHandler(async value => {
     const code = normalizeCode(value);
