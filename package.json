@@ -1,7 +1,7 @@
 {
   "name": "nnsi-app",
   "productName": "EFIR launcher",
-  "version": "0.1.40",
+  "version": "0.1.41",
   "private": true,
   "main": "main.js",
   "scripts": {

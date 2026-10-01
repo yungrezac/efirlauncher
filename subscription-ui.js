@@ -53,7 +53,7 @@
   async function start(){if(busy)return;busy=true;generation++;code=null;clearTimeout(timer);button('tribute-login',true,true);button('tribute-confirm',false);button('tribute-retry',false);
    try{const result=await api.startTelegramLink();if(!alive())return;code=result.code;expiresAt=Date.now()+result.expires_in*1000;
     await api.openExternal(result.url);if(!alive())return;
-    message('В @efirpaybot нажмите «Запустить», затем вернитесь сюда и подтвердите аккаунт.');timer=setTimeout(poll,1000);
+    message('Войдите через Telegram в браузере, затем вернитесь сюда и подтвердите аккаунт.');timer=setTimeout(poll,1000);
    }catch(e){if(alive())message(e.message||'Не удалось открыть Telegram.',true);}finally{busy=false;if(alive())get('tribute-login').disabled=false;}
   }
   get('tribute-login').onclick=start;get('tribute-retry').onclick=start;
