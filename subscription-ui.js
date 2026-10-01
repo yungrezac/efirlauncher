@@ -6,17 +6,16 @@
   const content=view.querySelector('.profile-content'),panel=content.querySelector('.subscription-panel');
   content.classList.add('subscription-minimal');content.querySelector('.profile-large-avatar')?.remove();
   content.querySelector('.profile-page-subtitle').textContent='Все приложения EFIR в одной подписке';
-  const summary=panel.querySelector('.subscription-summary'),promo=panel.querySelector('.promo-form');
+  const summary=panel.querySelector('.subscription-summary');
   panel.replaceChildren(summary);
   const flow=document.createElement('section');flow.className='tribute-flow';
   flow.innerHTML=`<div class="tribute-heading"><span class="tribute-mark">${telegramIcon}</span><div><span class="tribute-eyebrow">EFIR × TELEGRAM</span><h2>Один аккаунт. Все возможности.</h2><p>Привяжите Telegram и оформите подписку через Tribute.</p></div></div>
-   <div class="tribute-step" id="tribute-link-step"><span class="tribute-step-number">1</span><div class="tribute-step-content"><h3>Ваш Telegram</h3><div id="tribute-identity">Проверяем привязку…</div><div class="subscription-actions"><button type="button" id="tribute-login" class="primary-payment" disabled>Войти через Telegram ↗</button><button type="button" id="tribute-change" class="secondary-payment hidden">Сменить Telegram</button><button type="button" id="tribute-cancel" class="secondary-payment hidden">Отмена</button></div></div></div>
+   <div class="tribute-step" id="tribute-link-step"><span class="tribute-step-number">1</span><div class="tribute-step-content"><h3>Ваш Telegram</h3><div id="tribute-identity">Проверяем привязку…</div><div class="subscription-actions"><button type="button" id="tribute-login" class="primary-payment" disabled>Войти через Telegram ↗</button><button type="button" id="tribute-change" class="secondary-payment hidden">Сменить Telegram</button><button type="button" id="tribute-unlink" class="secondary-payment hidden">Отвязать Telegram</button><button type="button" id="tribute-cancel" class="secondary-payment hidden">Отмена</button></div></div></div>
    <div class="tribute-step is-locked" id="tribute-pay-step"><span class="tribute-step-number">2</span><div class="tribute-step-content"><h3>Подписка EFIR Launcher</h3><p id="tribute-offer">Срок и стоимость выбираются на странице Tribute.</p><div id="tribute-prices" class="tribute-prices"></div><p class="tribute-account-note">Оплачивайте через тот же Telegram, который привязали здесь.</p><div class="subscription-actions"><button type="button" id="tribute-pay" class="primary-payment hidden">Оплатить через Tribute ↗</button><button type="button" id="tribute-check" class="secondary-payment hidden">Проверить подписку</button></div></div></div>
    <p id="subscription-message" class="subscription-message" role="status" aria-live="polite"></p>`;
   panel.append(flow);
-  if(promo){const details=document.createElement('details');details.className='subscription-promo';const heading=document.createElement('summary');heading.textContent='Есть код автора или промокод?';details.append(heading,promo);panel.append(details);}
   const get=id=>flow.querySelector('#'+id),api=window.launcher;
-  let code=null,checkout=null,stopped=false,timer=null,busy=false,expiresAt=0,generation=0;
+  let code=null,checkout=null,linkedId=null,stopped=false,timer=null,busy=false,expiresAt=0,generation=0;
   const stopPaymentListener=api.onSubscriptionPaymentClosed?.(()=>{if(alive()&&!busy&&checkout)get('tribute-check').click();});
   const stopModalListener=api.onSubscriptionModal?.(state=>{
    if(!alive())return;
@@ -45,10 +44,10 @@
   stopCurrent=()=>{stopped=true;clearTimeout(timer);stopPaymentListener?.();stopModalListener?.();};
   async function load(){
    try{const state=await api.getTelegramSubscription();if(!alive())return;
-    checkout=state.checkout_url;const linked=!!state.telegram;
+    checkout=state.checkout_url;linkedId=state.telegram?.telegram_id||null;const linked=!!state.telegram;
     renderIdentity(state.telegram);
     get('tribute-link-step').classList.toggle('is-complete',linked);get('tribute-pay-step').classList.toggle('is-locked',!linked);
-    button('tribute-login',!linked,!state.ready);button('tribute-change',linked,!state.ready);button('tribute-cancel',false);
+    button('tribute-login',!linked,!state.ready);button('tribute-change',linked,!state.ready);button('tribute-cancel',false);button('tribute-unlink',linked);
     button('tribute-pay',linked,!(state.ready&&checkout));button('tribute-check',linked,!state.ready);
     if(!state.ready)message('Оплата через Tribute готовится к запуску. Уже активная подписка продолжает действовать.');
     else {
@@ -72,15 +71,26 @@
    }catch(e){if(alive()&&attempt===generation)message(e.message||'Ожидаем соединение…',true);}
    if(alive()&&attempt===generation)timer=setTimeout(poll,2500);
   }
-  async function start(){if(busy)return;busy=true;const attempt=++generation;code=null;clearTimeout(timer);button('tribute-login',true,true);button('tribute-change',false);button('tribute-cancel',true);
+  async function start(){if(busy)return;busy=true;const attempt=++generation;code=null;clearTimeout(timer);button('tribute-unlink',false);button('tribute-login',true,true);button('tribute-change',false);button('tribute-cancel',true);
    try{const result=await api.startTelegramLink();if(!alive()||attempt!==generation)return;code=result.code;expiresAt=Date.now()+result.expires_in*1000;
     message('Завершите вход в Telegram. Аккаунт привяжется автоматически, подписка и доступы обновятся.');timer=setTimeout(poll,1000);
    }catch(e){if(alive())message(e.message||'Не удалось открыть Telegram.',true);}finally{busy=false;if(alive())get('tribute-login').disabled=false;}
   }
   get('tribute-login').onclick=start;get('tribute-change').onclick=start;
+  get('tribute-unlink').onclick=async()=>{
+   if(busy||!linkedId)return;
+   if(!confirm('Отвязать Telegram? Доступ от его подписки будет снят с этого аккаунта EFIR. Оплаченная подписка останется у Telegram и сможет подключиться к другому аккаунту.'))return;
+   busy=true;generation++;code=null;clearTimeout(timer);
+   const id=linkedId;
+   for(const name of ['tribute-change','tribute-unlink','tribute-pay','tribute-check'])get(name).disabled=true;
+   let outcome='Telegram отвязан. Подписка и доступы обновлены.',failed=false;
+   try{await api.unlinkTelegram(id);await refreshSubscription();}
+   catch(e){outcome=String(e.message||'Не удалось отвязать Telegram.').replace(/^Error invoking remote method '[^']+': Error: /,'');failed=true;}
+   finally{if(alive()){await load();message(outcome,failed);}busy=false;}
+  };
   get('tribute-cancel').onclick=async()=>{if(busy)return;generation++;code=null;clearTimeout(timer);await api.cancelTelegramLink();if(alive()){message('Смена аккаунта отменена.');await load();}};
   async function completeLogin(){if(busy||!code)return;busy=true;clearTimeout(timer);
-   button('tribute-login',false);button('tribute-cancel',false);button('tribute-change',false);button('tribute-pay',false);button('tribute-check',false);
+   button('tribute-unlink',false);button('tribute-login',false);button('tribute-cancel',false);button('tribute-change',false);button('tribute-pay',false);button('tribute-check',false);
    message('Обновляем Telegram и подписку…');
    let outcome='',failed=false;
    try{const result=await api.confirmTelegramLink(code);await refreshSubscription();outcome=result.verification_pending?'Telegram подключён. Проверка подписки Tribute пока недоступна.':'Telegram подключён. Подписка и доступы обновлены.';}

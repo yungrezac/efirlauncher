@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('launcher', {
   setAutoStart: enabled => ipcRenderer.invoke('settings:auto-start', Boolean(enabled)),
   redeemPromo: code => ipcRenderer.invoke('promo:redeem', code),
   redeemCode: code => ipcRenderer.invoke('code:redeem', code),
+  unlinkTelegram: telegramId => ipcRenderer.invoke('subscription:telegram-unlink', telegramId),
   getPendingReferral: () => ipcRenderer.invoke('referral:pending'),
   getReferralStatus: () => ipcRenderer.invoke('referral:status'),
   claimReferral: code => ipcRenderer.invoke('referral:claim', code),

@@ -606,6 +606,21 @@ app.whenReady().then(() => {
       }));
     }
   }));
+  ipcMain.handle('subscription:telegram-unlink', subscriptionHandler(async telegramId => {
+    if(accessChanging)throw Error('Дождитесь обновления подписки.');
+    accessChanging=true;invalidateAccess();
+    ++telegramLoginAttempt;telegramLoginCode=null;subscriptionWindows.reset();
+    try {
+      return await licenseRequest('POST','/v1/subscription/telegram/unlink',{telegram_id:telegramId});
+    } finally {
+      accessChanging=false;invalidateAccess();
+      const running=statusItems().filter(item=>runningAppIds.has(item.id));
+      await Promise.all(running.map(async item=>{
+        const allowed=await checkLicense(item.id).catch(()=>false);
+        if(!allowed)await stopAppProcesses(item).catch(error=>writeLog('subscription access shutdown failed',{id:item.id,message:error.message}));
+      }));
+    }
+  }));
   ipcMain.handle('subscription:open-payment', subscriptionHandler(async () => {
     const token=supabaseAccessToken,state=await licenseRequest('GET','/v1/subscription/telegram');
     if(token!==supabaseAccessToken)throw Error('Аккаунт EFIR изменился.');
