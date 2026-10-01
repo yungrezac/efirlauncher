@@ -36,6 +36,7 @@ catalogNav.addEventListener('click', event => { event.preventDefault(); switchVi
 
 let authMode = 'login';
 let apps = [];
+let catalogAccountRevision = 0;
 let accountSubscription = null;
 let selectedAppId = null;
 let viewMode = 'mine';
@@ -330,6 +331,8 @@ async function showHomeView() {
 }
 async function logout() {
   if (subscriptionOrder && !(await cancelPendingSubscription(true))) return;
+  catalogAccountRevision++;
+  apps = [];
   await supabase.auth.signOut({scope:'local'});
   await window.launcher.setSession(null);
   hide('#store');
@@ -341,42 +344,52 @@ function setProfile(user) { const name = user.user_metadata?.name || user.email?
 function setAuthMode(mode) { authMode = mode; const signup = mode === 'signup'; $('#name-field').classList.toggle('hidden', !signup); $('#auth-title').textContent = signup ? 'Создать аккаунт' : 'Войти в магазин'; $('#auth-subtitle').textContent = signup ? 'Регистрация займёт несколько секунд.' : 'Управляйте своими приложениями.'; $('#auth-submit').textContent = signup ? 'Зарегистрироваться' : 'Войти'; $('#auth-switch').textContent = signup ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться'; message(''); }
 function fallbackApp(item, status = {}) { return { ...item, ...status, ...(item.id==='tiktimer'?{name:'ТАЙМЕР',icon_url:'./assets/timer-logo.svg',cover_url:'./assets/timer-logo.svg'}:{}), description: item.description || 'Ваш персональный инструмент от Astral.', media: item.media || [] }; }
 async function loadApps() {
-  const local = await window.launcher.getCatalog();
+  const revision = catalogAccountRevision;
+  // Cached cards never establish personal visibility; wait for authenticated RLS.
+  const local = (await window.launcher.getCatalog()).filter(item => !item.is_exclusive && !['tiktimer','immwiget'].includes(item.id));
   const cached = await window.launcher.getCachedApps();
+  if (revision !== catalogAccountRevision) return;
   apps = local.map(item => { const status = cached.find(x => x.id === item.id) || {}; return fallbackApp({ ...item, media: item.media || [] }, { ...status, installed: status.installedVersion || (status.installedOnDisk ? 'локально' : null) }); });
   applySubscriptionAccess();
   renderApps(); $('#status').textContent = 'Проверяю обновления в фоне…';
   getRemoteAppData(local).catch(error => { console.warn('[Astral Store]', error); $('#status').textContent = 'Оффлайн-режим'; });
 }
 async function getRemoteAppData(local) {
+  const accountRevision = catalogAccountRevision;
   const revisions = new Map(appStatusRevisions);
   const statusRequest = window.launcher.getApps();
   // RLS returns public applications plus unpublished exclusive applications
   // granted to the current user. A client-side is_published filter would hide
   // those personal grants before they can reach the Exclusive tab.
   const result = await supabase.from('store_apps').select('*, store_media(*)').order('created_at', { ascending: false });
+  if (accountRevision !== catalogAccountRevision) return;
   const remote = !result.error && Array.isArray(result.data) ? result.data : null;
   const source = remote || local;
   apps = preserveCompletedOperations(source.map(item => fallbackApp({...item,media:item.store_media||item.media||[]},apps.find(x=>x.id===item.id)||{})),revisions);
   renderApps();
   const statuses = await statusRequest;
   const enriched = await Promise.all(source.map(async item => { const status = statuses.find(x => x.id === item.id) || await window.launcher.getAppStatus(item, {checkRelease:true}); const licenseAvailable = status.licenseAvailable === null || status.licenseAvailable === undefined ? apps.find(x => x.id === item.id)?.licenseAvailable : status.licenseAvailable; return fallbackApp({ ...item, media: item.store_media || item.media || [] }, { ...status, licenseAvailable, installed: status.installedVersion || status.installed || (status.installedOnDisk ? 'локально' : null) }); }));
+  if (accountRevision !== catalogAccountRevision) return;
   apps = preserveCompletedOperations(enriched, revisions);
   applySubscriptionAccess();
   apps.forEach(item => { if (item.latest) appVersions.set(item.id, item.latest); });
   renderApps(); $('#status').textContent = 'Готово';
 }
 async function reloadStoreCatalog({ checkRelease = false } = {}) {
+  const accountRevision = catalogAccountRevision;
   const revisions = new Map(appStatusRevisions);
   const result = await supabase.from('store_apps').select('*, store_media(*)').order('created_at', { ascending: false });
+  if (accountRevision !== catalogAccountRevision) return { updates: 0, failed: 0 };
   if (result.error) throw result.error;
   const source = Array.isArray(result.data) ? result.data : [];
   const enriched = await Promise.all(source.map(async item => { const status = await window.launcher.getAppStatus(item, { checkRelease, forceRelease: checkRelease }); const previous = apps.find(current => current.id === item.id); const licenseAvailable = status.licenseAvailable === null || status.licenseAvailable === undefined ? previous?.licenseAvailable : status.licenseAvailable; return fallbackApp({ ...previous, ...item, media: item.store_media || [] }, { ...status, error: status.error || null, licenseAvailable, installed: status.installedVersion || (status.installedOnDisk ? previous?.installed || 'локально' : null) }); }));
+  if (accountRevision !== catalogAccountRevision) return { updates: 0, failed: 0 };
   apps = preserveCompletedOperations(enriched, revisions);
   applySubscriptionAccess();
   renderApps(); $('#status').textContent = 'Каталог обновлён';
   apps.forEach(item => { if (item.latest) appVersions.set(item.id, item.latest); });
   if (selectedAppId && !$('#detail-view').classList.contains('hidden') && apps.some(item => item.id === selectedAppId)) renderDetail(selectedAppId);
+  if (selectedAppId && !apps.some(item => item.id === selectedAppId)) showHomeView();
   return { updates: apps.filter(item => item.update).length, failed: enriched.filter(item => item.error).length };
 }
 // The header is a separate script; keep renderer state private and expose only
@@ -599,8 +612,9 @@ function showApplicationError(item, error) {
 }
 async function performAction(action, id) { return performApplicationAction(action, id, $('#detail-action')); }
 async function performCardAction(action, id, button) { return performApplicationAction(action, id, button); }
-async function enterStore(user, session, claim=false) { setProfile(user); if(!await window.launcher.setSession(session?.access_token || null,{initialize:true,claim}))return; refreshSubscriptionBadge().catch(error=>console.warn(error)); launcherSettings = await window.launcher.getSettings().catch(() => launcherSettings); hide('#auth'); show('#store'); await loadApps(); subscribeCatalogRealtime(); }
+async function enterStore(user, session, claim=false) { const revision=++catalogAccountRevision; apps=[]; setProfile(user); if(!await window.launcher.setSession(session?.access_token || null,{initialize:true,claim})||revision!==catalogAccountRevision)return; refreshSubscriptionBadge().catch(error=>console.warn(error)); launcherSettings = await window.launcher.getSettings().catch(() => launcherSettings); if(revision!==catalogAccountRevision)return; hide('#auth'); show('#store'); showHomeView(); await loadApps(); if(revision===catalogAccountRevision)subscribeCatalogRealtime(); }
 window.launcher.onSessionBlocked(async reason=>{
+ catalogAccountRevision++;apps=[];
  hide('#store');hide('#auth');
  document.querySelector('.session-blocked')?.remove();
  const overlay=document.createElement('div');overlay.className='subscription-overlay session-blocked';

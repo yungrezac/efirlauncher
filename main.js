@@ -47,6 +47,22 @@ function invalidateAccess() { accessRevision++; licenseStatusCache.clear(); }
 let launcherSettings = { autoUpdate: false, autoStart: false };
 let state = {};
 let mainWindow;
+const { normalizeCode, parseReferralUrl } = require('./referral-protocol.cjs');
+const pendingReferralFile = path.join(app.getPath('userData'), 'pending-referral.json');
+let pendingReferral = null;
+try {
+  const saved = JSON.parse(fs.readFileSync(pendingReferralFile, 'utf8'));
+  if (normalizeCode(saved.code) && Number.isFinite(saved.received_at) && Date.now() - saved.received_at >= 0 && Date.now() - saved.received_at < 30 * 86400000) pendingReferral = saved;
+} catch { /* An invitation is optional. */ }
+function receiveReferral(value) {
+  const code = parseReferralUrl(value);
+  if (!code) return false;
+  pendingReferral = { code, received_at: Date.now() };
+  try { fs.mkdirSync(path.dirname(pendingReferralFile), { recursive: true }); fs.writeFileSync(pendingReferralFile, JSON.stringify(pendingReferral)); } catch { /* Keep it for this session. */ }
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('referral:pending', { code });
+  return true;
+}
+for (const value of process.argv) receiveReferral(value);
 let showWhenReady = false;
 function showMainWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) { showWhenReady = true; return; }
@@ -55,7 +71,8 @@ function showMainWindow() {
   mainWindow.show();
   mainWindow.focus();
 }
-app.on('second-instance', showMainWindow);
+app.on('second-instance', (_event, argv) => { for (const value of argv) receiveReferral(value); showMainWindow(); });
+app.on('open-url', (event, value) => { if (receiveReferral(value)) { event.preventDefault(); showMainWindow(); } });
 app.on('activate', showMainWindow);
 let tray;
 let isQuitting = false;
@@ -441,6 +458,7 @@ async function removeAppDirectory(directory, win) {
   for (const folder of folders.sort((a, b) => b.length - a.length)) await fsp.rmdir(folder).catch(error => { if (error.code !== 'ENOENT') throw error; });
 }
 app.whenReady().then(() => {
+  if (app.isPackaged) app.setAsDefaultProtocolClient('efir');
   writeLog('launcher ready', { userData: app.getPath('userData'), platform: process.platform, electron: process.versions.electron });
   migrateLegacyData();
   loadState(); loadSettings(); loadCatalogCache(); mainWindow = createWindow(); createTray(mainWindow); if (process.argv.includes('--hidden')) mainWindow.hide();
@@ -510,6 +528,28 @@ app.whenReady().then(() => {
     licenseStatusCache.clear();
     return result;
   });
+  const referralHandler = handler => (event, ...args) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) throw Error('Unauthorized referral request');
+    return handler(...args);
+  };
+  ipcMain.handle('referral:pending', referralHandler(() => pendingReferral ? { code: pendingReferral.code } : null));
+  ipcMain.handle('referral:status', referralHandler(() => licenseRequest('GET', '/v1/referrals/status')));
+  ipcMain.handle('referral:claim', referralHandler(async value => {
+    const code = normalizeCode(value);
+    if (!code) throw Error('Введите код автора: от 3 до 40 латинских букв, цифр, дефисов или подчёркиваний.');
+    const token = supabaseAccessToken;
+    if (!token) throw Error('Сначала войдите в аккаунт EFIR.');
+    const machine_id = await machineId();
+    if (token !== supabaseAccessToken) throw Error('Аккаунт изменился. Повторите ввод кода.');
+    const result = await licenseRequest('POST', '/v1/referrals/claim', { code, machine_id });
+    if (token !== supabaseAccessToken) throw Error('Аккаунт изменился. Проверьте код в своём профиле.');
+    if (pendingReferral?.code === code) {
+      pendingReferral = null;
+      try { fs.unlinkSync(pendingReferralFile); } catch { /* Already absent. */ }
+    }
+    invalidateAccess();
+    return result;
+  }));
   ipcMain.handle('subscription:get', () => licenseRequest('GET', '/v1/subscription'));
   const subscriptionHandler = handler => (event,...args) => {
     if(!mainWindow||event.sender!==mainWindow.webContents||event.senderFrame!==mainWindow.webContents.mainFrame)throw Error('Unauthorized subscription request');
